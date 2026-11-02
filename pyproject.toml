@@ -1,0 +1,23 @@
+[project]
+name = "stock_ipo_research_agent"
+version = "0.1.0"
+description = "stock-ipo-research-agent using crewAI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "crewai[tools]>=1.15.34,<2.0.0"
+]
+
+[project.scripts]
+kickoff = "stock_ipo_research_agent.main:kickoff"
+run_crew = "stock_ipo_research_agent.main:kickoff"
+plot = "stock_ipo_research_agent.main:plot"
+run_with_trigger = "stock_ipo_research_agent.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "flow"
+project_id = "6439e045-5f0b-4fea-b22a-bbd3006f6a5e"

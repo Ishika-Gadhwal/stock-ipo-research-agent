@@ -1,0 +1,17 @@
+# Secrets: never commit API keys
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# CrewAI
+.crewai/
+lib/
+
+# Generated reports and outputs
+output/
+
+# OS files
+.DS_Store
