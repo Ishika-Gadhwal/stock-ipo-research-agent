@@ -12,41 +12,17 @@ class ContentCrew:
 
     agents_config = "config/agents.yaml"
     tasks_config = "config/tasks.yaml"
-
+    
     @agent
-    def planner(self) -> Agent:
+    def company_researcher(self) -> Agent:
         return Agent(
-            config=self.agents_config["planner"],  # type: ignore[index]
-        )
-
-    @agent
-    def writer(self) -> Agent:
-        return Agent(
-            config=self.agents_config["writer"],  # type: ignore[index]
-        )
-
-    @agent
-    def editor(self) -> Agent:
-        return Agent(
-            config=self.agents_config["editor"],  # type: ignore[index]
+            config=self.agents_config["company_researcher"],  # type: ignore[index]
         )
 
     @task
-    def planning_task(self) -> Task:
+    def research_checklist_task(self) -> Task:
         return Task(
-            config=self.tasks_config["planning_task"],  # type: ignore[index]
-        )
-
-    @task
-    def writing_task(self) -> Task:
-        return Task(
-            config=self.tasks_config["writing_task"],  # type: ignore[index]
-        )
-
-    @task
-    def editing_task(self) -> Task:
-        return Task(
-            config=self.tasks_config["editing_task"],  # type: ignore[index]
+            config=self.tasks_config["research_checklist_task"],  # type: ignore[index]
         )
 
     @crew

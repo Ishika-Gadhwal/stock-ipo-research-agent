@@ -8,62 +8,50 @@ from crewai.flow import Flow, listen, start
 from stock_ipo_research_agent.crews.content_crew.content_crew import ContentCrew
 
 
-class ContentState(BaseModel):
-    topic: str = "AI Agents"
-    outline: str = ""
-    draft: str = ""
-    final_post: str = ""
+class ResearchState(BaseModel):
+    company: str = "Tata Motors"
+    report: str = ""
 
 
-class ContentFlow(Flow[ContentState]):
+class ResearchFlow(Flow[ResearchState]):
 
     @start()
-    def plan_content(self, crewai_trigger_payload: dict = None):
-        print("Planning content")
-
+    def prepare_request(self, crewai_trigger_payload: dict = None):
         if crewai_trigger_payload:
-            self.state.topic = crewai_trigger_payload.get("topic", self.state.topic)
-            print(f"Using trigger payload: {crewai_trigger_payload}")
+            self.state.company = crewai_trigger_payload.get(
+                "company", self.state.company
+            )
+        print(f"Company: {self.state.company}")
 
-        print(f"Topic: {self.state.topic}")
-
-    @listen(plan_content)
-    def generate_content(self):
-        print(f"Generating content on: {self.state.topic}")
+    @listen(prepare_request)
+    def run_research(self):
         result = (
             ContentCrew()
             .crew()
-            .kickoff(inputs={"topic": self.state.topic})
+            .kickoff(inputs={"company": self.state.company})
         )
+        self.state.report = result.raw
 
-        print("Content generated")
-        self.state.final_post = result.raw
-
-    @listen(generate_content)
-    def save_content(self):
-        print("Saving content")
+    @listen(run_research)
+    def save_report(self):
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
-        with open(output_dir / "post.md", "w") as f:
-            f.write(self.state.final_post)
-        print("Post saved to output/post.md")
-        return self.state.final_post
+        path = output_dir / "report.md"
+        path.write_text(self.state.report, encoding="utf-8")
+        print(f"Report saved to {path}")
+        return self.state.report
 
 
 def kickoff():
-    content_flow = ContentFlow()
-    content_flow.kickoff()
+    ResearchFlow().kickoff()
 
 
 def plot():
-    content_flow = ContentFlow()
-    content_flow.plot()
+    ResearchFlow().plot()
 
 
 def run_with_trigger():
-    """
-    Run the flow with trigger payload.
-    """
+    """Run the flow with a JSON trigger payload."""
     import json
     import sys
 
@@ -75,11 +63,8 @@ def run_with_trigger():
     except json.JSONDecodeError:
         raise Exception("Invalid JSON payload provided as argument")
 
-    content_flow = ContentFlow()
-
     try:
-        # Not returned: this is a console script, and a non-None return exits 1.
-        content_flow.kickoff({"crewai_trigger_payload": trigger_payload})
+        ResearchFlow().kickoff({"crewai_trigger_payload": trigger_payload})
     except Exception as e:
         raise Exception(f"An error occurred while running the flow with trigger: {e}")
 
