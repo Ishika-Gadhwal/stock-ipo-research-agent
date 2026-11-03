@@ -1,0 +1,19 @@
+identify_company_task:
+  description: >
+    Find every listed Indian company that "{company}" could refer to.
+    Companies are often renamed, demerged or split, so one name can match
+    several listed entities with different NSE symbols.
+    Use exactly 3 searches:
+    1. "{company}" on nseindia.com
+    2. "{company}" demerger OR renamed OR "formerly"
+    3. "{company}" on bseindia.com
+    Never put a symbol, code or ISIN in a search query unless it already
+    appeared in an earlier search result.
+    List EVERY entity that appears in the results, even if you saw it once.
+    For each give the legal name, NSE symbol, BSE code, ISIN, a one-line
+    description of its business, and the URL where you saw it.
+    If you did not see a value in the results, leave it null.
+    Do NOT state any financial figures.
+  expected_output: >
+    A list of all candidate companies with the fields above.
+  agent: identity_analyst

@@ -10,4 +10,4 @@ company_researcher:
     company's own website, nseindia.com, bseindia.com and sebi.gov.in.
     Any other site must be labelled "unverified". When something is not
     found, you write "Not found" instead of guessing.
-  llm: gemini/gemini-3.1-flash-lite
+  llm: gemini/gemini-3.5-flash-lite

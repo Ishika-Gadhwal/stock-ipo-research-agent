@@ -6,10 +6,14 @@ from pydantic import BaseModel
 from crewai.flow import Flow, listen, start
 
 from stock_ipo_research_agent.crews.content_crew.content_crew import ContentCrew
+from stock_ipo_research_agent.crews.identity_crew.identity_crew import IdentityCrew
+from stock_ipo_research_agent.models import CompanyCandidate
 
 
 class ResearchState(BaseModel):
     company: str = "Tata Motors"
+    candidates: list[CompanyCandidate] = []
+    identity: CompanyCandidate | None = None
     report: str = ""
 
 
@@ -24,12 +28,45 @@ class ResearchFlow(Flow[ResearchState]):
         print(f"Company: {self.state.company}")
 
     @listen(prepare_request)
-    def run_research(self):
-        result = (
-            ContentCrew()
-            .crew()
-            .kickoff(inputs={"company": self.state.company})
+    def resolve_identity(self):
+        result = IdentityCrew().crew().kickoff(
+            inputs={"company": self.state.company}
         )
+        self.state.candidates = result.pydantic.candidates
+
+    @listen(resolve_identity)
+    def confirm_identity(self):
+        candidates = self.state.candidates
+        if not candidates:
+            raise ValueError("No matching companies found. Try a more specific name.")
+
+        print("\nPossible matches:")
+        for i, c in enumerate(candidates, start=1):
+            print(f"{i}. {c.legal_name} | NSE: {c.nse_symbol} | BSE: {c.bse_code} | ISIN: {c.isin}")
+            print(f"   {c.business}")
+            print(f"   Source: {c.source_url}")
+
+        if len(candidates) == 1:
+            print(
+                "\nNote: only one match found. If you expected more "
+                "(for example after a rename or demerger), press q and "
+                "try a more specific name."
+            )
+
+        while True:
+            choice = input(f"\nChoose 1-{len(candidates)}, or q to quit: ").strip().lower()
+            if choice == "q":
+                raise SystemExit("Stopped by user.")
+            if choice.isdigit() and 1 <= int(choice) <= len(candidates):
+                self.state.identity = candidates[int(choice) - 1]
+                return
+            print("Invalid choice, try again.")
+
+    @listen(confirm_identity)
+    def run_research(self):
+        e = self.state.identity
+        company = f"{e.legal_name} (NSE: {e.nse_symbol}, BSE: {e.bse_code}, ISIN: {e.isin})"
+        result = ContentCrew().crew().kickoff(inputs={"company": company})
         self.state.report = result.raw
 
     @listen(run_research)
