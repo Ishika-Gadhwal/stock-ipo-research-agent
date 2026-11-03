@@ -56,7 +56,7 @@ class AnnualReportReaderTests(unittest.TestCase):
             self.reader.read("https://example.test/report.pdf", self.company, ["  "])
 
 
-        def test_formerly_name_is_not_the_current_legal_name(self) -> None:
+    def test_formerly_name_is_not_the_current_legal_name(self) -> None:
         old_name = self.company.model_copy(update={"legal_name": "Old Name Limited"})
         pages = ["Example Industries Limited\n(formerly Old Name Limited)\nNSE: EXAMPLE"]
         with self.assertRaises(DocumentIdentityError):
@@ -68,8 +68,9 @@ class AnnualReportReaderTests(unittest.TestCase):
         self.assertIn("Identifier: EXAMPLE", evidence)
 
     def test_heading_pages_outrank_pages_that_only_mention_the_term(self) -> None:
-        pages = ["Auditor says: Consolidated Balance Sheet is fine " * 3, "x" * 500,
-                 "Consolidated Balance Sheet\n(\u20b9 in crores)", "x"]
+        pages = ["x" * 500 + " Auditor says: Consolidated Balance Sheet is fine",
+         "x" * 500,
+         "Consolidated Balance Sheet\n(\u20b9 in crores)", "x"]
         excerpts = self.reader._find_excerpts(
             pages, ["consolidated balance sheet"], context_pages=0, max_excerpt_pages=1,
             heading_only=True,
