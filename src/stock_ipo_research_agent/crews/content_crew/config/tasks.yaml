@@ -1,9 +1,11 @@
-research_checklist_task:
+source_discovery_task:
   description: >
-    Produce a research checklist for {company}.
-    List the key questions an investor should answer about its business
-    model, financial health, ownership, competitors and risks.
-    Do NOT state any financial figures, prices or dates.
+    Use the search tool to find the official sources for {company}:
+    its latest annual report, its investor relations page, and its
+    exchange filings pages. Use at most 3 searches.
+    Do NOT state any financial figures.
   expected_output: >
-    A markdown checklist grouped under clear headings.
+    A markdown table with columns: Source, URL, Official or Unverified,
+    Date shown in the result (or "Not stated"). Then a short list of
+    anything you could not find.
   agent: company_researcher
