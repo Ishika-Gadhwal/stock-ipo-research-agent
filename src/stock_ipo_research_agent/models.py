@@ -12,3 +12,20 @@ class CompanyCandidate(BaseModel):
 
 class IdentityResult(BaseModel):
     candidates: list[CompanyCandidate]
+
+
+class DocumentExcerpt(BaseModel):
+    """A bounded, citable section of a source document."""
+
+    pdf_page: int
+    text: str
+    matched_terms: list[str]
+
+
+class AnnualReportReadResult(BaseModel):
+    source_url: str
+    document_sha256: str
+    total_pages: int
+    identity_strength: str  # "identifier" or "name_only"
+    identity_evidence: list[str]
+    excerpts: list[DocumentExcerpt]

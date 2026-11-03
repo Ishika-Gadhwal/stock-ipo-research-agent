@@ -15,3 +15,5 @@ output/
 
 # OS files
 .DS_Store
+
+cache/

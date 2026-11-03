@@ -4012,10 +4012,16 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "crewai", extra = ["google-genai", "tools"] },
+    { name = "pdfplumber" },
+    { name = "requests" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "crewai", extras = ["google-genai", "tools"], specifier = ">=1.15.34,<2.0.0" }]
+requires-dist = [
+    { name = "crewai", extras = ["google-genai", "tools"], specifier = ">=1.15.34,<2.0.0" },
+    { name = "pdfplumber", specifier = ">=0.11,<1.0" },
+    { name = "requests", specifier = ">=2.32,<3.0" },
+]
 
 [[package]]
 name = "sympy"
