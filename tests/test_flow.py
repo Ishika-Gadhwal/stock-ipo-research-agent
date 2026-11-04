@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # reuse the other tests' fixtures
+os.environ.setdefault("CREWAI_TRACING_ENABLED", "false")  # no "share trace?" prompt in tests
 
 from test_financial_facts import COMPANY, URL, FakeLoader, client_that_saw  # noqa: E402
 from test_statement_extractor import CONSOLIDATED_PAGE, STANDALONE_PAGE  # noqa: E402
@@ -77,17 +78,29 @@ class FlowTests(unittest.TestCase):
         self.assertIn("**Warning:**", text)
         self.assertIn("8.3", text)
 
-    def test_url_the_analyst_made_up_gets_no_figures(self) -> None:
+    def test_url_the_analyst_made_up_is_never_read_and_code_falls_back(self) -> None:
         note = AnalystNote(report_url="https://made-up.example/ar.pdf", notes="No numbers.")
         text = self.run_flow(content_output([URL], note))
-        self.assertIn("No figures were extracted.", text)
         self.assertIn("not returned by any search", text)
-        self.assertNotIn("| Basis |", text)
+        self.assertIn("Fell back to an annual report PDF found by search", text)
+        self.assertIn("| Consolidated | Total revenue from operations | March 31, 2026 | 335,582 | 2 |", text)
+        self.assertIn("Note:", text)
 
-    def test_analyst_without_a_url_gets_no_figures(self) -> None:
+    def test_analyst_without_a_url_falls_back_to_a_search_result(self) -> None:
         note = AnalystNote(report_url=None, notes="Could not find the annual report.")
         text = self.run_flow(content_output([URL], note))
         self.assertIn("did not select an annual report URL", text)
+        self.assertIn("Fell back to an annual report PDF found by search", text)
+        self.assertIn("335,582", text)
+
+    def test_no_annual_report_pdf_anywhere_means_no_figures(self) -> None:
+        page = "https://example.com/investor-relations"
+        note = AnalystNote(report_url=None, notes="Could not find the annual report.")
+        text = self.run_flow(content_output([page], note), client=client_that_saw(page))
+        self.assertIn("No figures were extracted.", text)
+        self.assertIn("Reason:", text)
+        self.assertIn("did not select an annual report URL", text)
+        self.assertNotIn("| Basis |", text)
 
     def test_source_url_that_no_search_returned_is_rejected(self) -> None:
         note = AnalystNote(report_url=URL, notes="Ok.")

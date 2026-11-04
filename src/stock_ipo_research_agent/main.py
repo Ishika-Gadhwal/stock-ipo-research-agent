@@ -9,12 +9,12 @@ from stock_ipo_research_agent.crews.content_crew.content_crew import ContentCrew
 from stock_ipo_research_agent.crews.identity_crew.identity_crew import IdentityCrew
 from stock_ipo_research_agent.models import CompanyCandidate
 from stock_ipo_research_agent.report import build_report, empty_facts
-from stock_ipo_research_agent.tools.annual_report_reader import DocumentReaderError
 from stock_ipo_research_agent.tools.financial_facts import (
     extract_pl_facts,
     reset_company,
     set_company,
 )
+from stock_ipo_research_agent.tools.facts_selection import find_facts
 from stock_ipo_research_agent.tools.numbers_check import find_unverified_numbers
 from stock_ipo_research_agent.tools.search import get_search_client, reset_search_client
 from stock_ipo_research_agent.tools.source_checks import build_source_table
@@ -93,19 +93,11 @@ class ResearchFlow(Flow[ResearchState]):
         client = get_search_client()
         sources_table, rejected = build_source_table(selection.urls, client)
 
-        # Figures come from code, never from the analyst's words.
-        facts = None
-        facts_problem = None
+        # Figures come from code, never from the analyst's words. The analyst picks the
+        # report; if that fails, code falls back to annual-report PDFs found by search.
         report_url = note.report_url if note else None
-        if not report_url:
-            facts_problem = "The analyst did not select an annual report URL."
-        elif not client.was_seen(report_url):
-            facts_problem = f"The analyst's URL was not returned by any search: {report_url}"
-        else:
-            try:
-                facts = extract_pl_facts(report_url, e)
-            except (DocumentReaderError, ValueError) as error:
-                facts_problem = f"Could not read the report: {error}"
+        facts, facts_notes = find_facts(client, e, report_url, extract=extract_pl_facts)
+        facts_problem = " ".join(facts_notes) or None
 
         unverified: list[str] = []
         if note:

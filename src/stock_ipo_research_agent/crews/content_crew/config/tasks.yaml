@@ -1,8 +1,13 @@
 source_discovery_task:
   description: >
-    Use the search tool to find the official sources for {company}:
-    its latest annual report, its investor relations page, and its
-    exchange filings pages. Use at most 3 searches.
+    Use the search tool to find the official sources for {company}.
+    Use at most 3 searches, in this order:
+    1. The latest annual report PDF. Search for the company name, "annual report",
+    the latest financial year and "pdf", preferring nseindia.com and bseindia.com.
+    2. The investor relations page.
+    3. Only if something is still missing: the exchange filings page.
+    If any search result is a direct PDF link to the latest annual report, you MUST
+    include that exact URL in your answer.
     Select only URLs that appear in the search results, copied exactly.
     Do NOT invent or change a URL. Do NOT state any financial figures,
     dates or labels.

@@ -67,6 +67,13 @@ class ReportTests(unittest.TestCase):
         self.assertIn("- https://made-up.example", text)
         self.assertIn("- investor relations page", text)
 
+    def test_note_label_when_figures_exist_and_reason_label_when_they_do_not(self) -> None:
+        with_figures = report(facts_problem="Fell back to a PDF found by search.")
+        self.assertIn("Note: Fell back to a PDF found by search.", with_figures)
+        self.assertNotIn("Reason:", with_figures)
+        without = report(facts=None, facts_problem="Nothing found.")
+        self.assertIn("Reason: Nothing found.", without)
+
     def test_missing_note_is_stated(self) -> None:
         self.assertIn("The analyst returned no notes.", report(note=None))
 

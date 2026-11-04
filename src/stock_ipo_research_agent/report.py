@@ -87,7 +87,8 @@ def build_report(
         lines += ["", "Could not extract:", ""]
         lines += [f"- {p}" for p in facts.problems]
     if facts_problem:
-        lines += ["", f"Reason: {facts_problem}"]
+        label = "Note" if facts is not None and facts.figures else "Reason"
+        lines += ["", f"{label}: {facts_problem}"]
 
     lines += ["", "## Analyst notes (written by an LLM; check against the table above)", ""]
     if note is None:
