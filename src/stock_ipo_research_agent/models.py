@@ -29,3 +29,12 @@ class AnnualReportReadResult(BaseModel):
     identity_strength: str  # "identifier" or "name_only"
     identity_evidence: list[str]
     excerpts: list[DocumentExcerpt]
+
+class SelectedSources(BaseModel):
+    """What the research agent returns: only a pick of URLs from its search results.
+
+    Titles, dates and the official/unverified label are added by code, not by the agent.
+    """
+
+    urls: list[str]
+    not_found: list[str] = []

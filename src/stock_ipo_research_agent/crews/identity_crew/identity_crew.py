@@ -1,7 +1,7 @@
 from crewai import Agent, Crew, Process, Task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, crew, task
-from crewai_tools import SerperDevTool
+from stock_ipo_research_agent.tools.source_search_tool import SourceSearchTool
 
 from stock_ipo_research_agent.models import IdentityResult
 
@@ -20,7 +20,7 @@ class IdentityCrew:
     def identity_analyst(self) -> Agent:
         return Agent(
             config=self.agents_config["identity_analyst"],  # type: ignore[index]
-            tools=[SerperDevTool(n_results=5)],
+            tools=[SourceSearchTool()],
             max_iter=6,
         )
 

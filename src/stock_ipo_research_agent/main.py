@@ -8,6 +8,8 @@ from crewai.flow import Flow, listen, start
 from stock_ipo_research_agent.crews.content_crew.content_crew import ContentCrew
 from stock_ipo_research_agent.crews.identity_crew.identity_crew import IdentityCrew
 from stock_ipo_research_agent.models import CompanyCandidate
+from stock_ipo_research_agent.tools.search import get_search_client, reset_search_client
+from stock_ipo_research_agent.tools.source_checks import build_source_table
 
 
 class ResearchState(BaseModel):
@@ -21,6 +23,7 @@ class ResearchFlow(Flow[ResearchState]):
 
     @start()
     def prepare_request(self, crewai_trigger_payload: dict = None):
+        reset_search_client()  # new run, so forget URLs from any earlier run
         if crewai_trigger_payload:
             self.state.company = crewai_trigger_payload.get(
                 "company", self.state.company
@@ -45,6 +48,8 @@ class ResearchFlow(Flow[ResearchState]):
             print(f"{i}. {c.legal_name} | NSE: {c.nse_symbol} | BSE: {c.bse_code} | ISIN: {c.isin}")
             print(f"   {c.business}")
             print(f"   Source: {c.source_url}")
+            if not get_search_client().was_seen(c.source_url):
+                print("   [warning: this source URL was not found in any search result]")
 
         if len(candidates) == 1:
             print(
@@ -67,7 +72,29 @@ class ResearchFlow(Flow[ResearchState]):
         e = self.state.identity
         company = f"{e.legal_name} (NSE: {e.nse_symbol}, BSE: {e.bse_code}, ISIN: {e.isin})"
         result = ContentCrew().crew().kickoff(inputs={"company": company})
-        self.state.report = result.raw
+        selection = result.pydantic
+        if selection is None:
+            raise ValueError("The research step did not return a structured list of sources.")
+
+        # The agent only picked URLs. Code fills in title, date and type from real search results.
+        table, rejected = build_source_table(selection.urls, get_search_client())
+
+        lines = [
+            f"# Sources for {e.legal_name}",
+            "",
+            f"NSE: {e.nse_symbol} | BSE: {e.bse_code} | ISIN: {e.isin}",
+            "",
+            "## Sources found by search",
+            "",
+            table,
+        ]
+        if rejected:
+            lines += ["", "## Rejected URLs (not found in any search result)", ""]
+            lines += [f"- {url}" for url in rejected]
+        if selection.not_found:
+            lines += ["", "## Not found", ""]
+            lines += [f"- {item}" for item in selection.not_found]
+        self.state.report = "\n".join(lines) + "\n"
 
     @listen(run_research)
     def save_report(self):

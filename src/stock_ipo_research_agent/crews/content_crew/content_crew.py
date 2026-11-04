@@ -1,7 +1,8 @@
 from crewai import Agent, Crew, Process, Task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, crew, task
-from crewai_tools import SerperDevTool
+from stock_ipo_research_agent.tools.source_search_tool import SourceSearchTool
+from stock_ipo_research_agent.models import SelectedSources
 
 
 @CrewBase
@@ -18,7 +19,7 @@ class ContentCrew:
     def company_researcher(self) -> Agent:
         return Agent(
             config=self.agents_config["company_researcher"],  # type: ignore[index]
-            tools=[SerperDevTool(n_results=3)],
+            tools=[SourceSearchTool()],
             max_iter=5,
         )
 
@@ -26,6 +27,7 @@ class ContentCrew:
     def source_discovery_task(self) -> Task:
         return Task(
             config=self.tasks_config["source_discovery_task"],  # type: ignore[index]
+            output_pydantic=SelectedSources,
         )
 
     @crew
