@@ -44,3 +44,9 @@ class AnalystNote(BaseModel):
 
     report_url: str | None = None  # the annual report URL given to the tool, or None
     notes: str
+
+
+class Narrative(BaseModel):
+    """The report writer's output: a short summary. Its numbers are checked by code."""
+
+    summary: str

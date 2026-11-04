@@ -1,0 +1,19 @@
+writing_task:
+  description: >
+    Write a summary for {company} using ONLY the verified figures below.
+    Rules:
+    - At most 5 sentences.
+    - Copy every figure exactly as given, with its unit, and say whether it is
+    consolidated or standalone.
+    - Do NOT calculate anything: no percentages, differences, growth, averages or
+    rounding. Do NOT compare years.
+    - Write counts in words (for example "two statements"). Use digits only for the
+    given figures and their PDF page numbers.
+    - Do NOT add any fact about the company that is not in the figures below.
+    - If the figures say none were extracted, write one sentence saying no figures
+    were extracted, and nothing else.
+
+    {facts_text}
+  expected_output: >
+    summary: the short summary text.
+  agent: report_writer
