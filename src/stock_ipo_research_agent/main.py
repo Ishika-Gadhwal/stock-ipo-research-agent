@@ -8,6 +8,14 @@ from crewai.flow import Flow, listen, start
 from stock_ipo_research_agent.crews.content_crew.content_crew import ContentCrew
 from stock_ipo_research_agent.crews.identity_crew.identity_crew import IdentityCrew
 from stock_ipo_research_agent.models import CompanyCandidate
+from stock_ipo_research_agent.report import build_report, empty_facts
+from stock_ipo_research_agent.tools.annual_report_reader import DocumentReaderError
+from stock_ipo_research_agent.tools.financial_facts import (
+    extract_pl_facts,
+    reset_company,
+    set_company,
+)
+from stock_ipo_research_agent.tools.numbers_check import find_unverified_numbers
 from stock_ipo_research_agent.tools.search import get_search_client, reset_search_client
 from stock_ipo_research_agent.tools.source_checks import build_source_table
 
@@ -24,6 +32,7 @@ class ResearchFlow(Flow[ResearchState]):
     @start()
     def prepare_request(self, crewai_trigger_payload: dict = None):
         reset_search_client()  # new run, so forget URLs from any earlier run
+        reset_company()
         if crewai_trigger_payload:
             self.state.company = crewai_trigger_payload.get(
                 "company", self.state.company
@@ -64,6 +73,8 @@ class ResearchFlow(Flow[ResearchState]):
                 raise SystemExit("Stopped by user.")
             if choice.isdigit() and 1 <= int(choice) <= len(candidates):
                 self.state.identity = candidates[int(choice) - 1]
+                # The report tool reads this, so the LLM can never pick the company.
+                set_company(self.state.identity)
                 return
             print("Invalid choice, try again.")
 
@@ -72,29 +83,44 @@ class ResearchFlow(Flow[ResearchState]):
         e = self.state.identity
         company = f"{e.legal_name} (NSE: {e.nse_symbol}, BSE: {e.bse_code}, ISIN: {e.isin})"
         result = ContentCrew().crew().kickoff(inputs={"company": company})
-        selection = result.pydantic
+
+        # Task 1 = source finder, task 2 = financial analyst.
+        selection = result.tasks_output[0].pydantic
+        note = result.tasks_output[1].pydantic
         if selection is None:
             raise ValueError("The research step did not return a structured list of sources.")
 
-        # The agent only picked URLs. Code fills in title, date and type from real search results.
-        table, rejected = build_source_table(selection.urls, get_search_client())
+        client = get_search_client()
+        sources_table, rejected = build_source_table(selection.urls, client)
 
-        lines = [
-            f"# Sources for {e.legal_name}",
-            "",
-            f"NSE: {e.nse_symbol} | BSE: {e.bse_code} | ISIN: {e.isin}",
-            "",
-            "## Sources found by search",
-            "",
-            table,
-        ]
-        if rejected:
-            lines += ["", "## Rejected URLs (not found in any search result)", ""]
-            lines += [f"- {url}" for url in rejected]
-        if selection.not_found:
-            lines += ["", "## Not found", ""]
-            lines += [f"- {item}" for item in selection.not_found]
-        self.state.report = "\n".join(lines) + "\n"
+        # Figures come from code, never from the analyst's words.
+        facts = None
+        facts_problem = None
+        report_url = note.report_url if note else None
+        if not report_url:
+            facts_problem = "The analyst did not select an annual report URL."
+        elif not client.was_seen(report_url):
+            facts_problem = f"The analyst's URL was not returned by any search: {report_url}"
+        else:
+            try:
+                facts = extract_pl_facts(report_url, e)
+            except (DocumentReaderError, ValueError) as error:
+                facts_problem = f"Could not read the report: {error}"
+
+        unverified: list[str] = []
+        if note:
+            unverified = find_unverified_numbers(note.notes, facts or empty_facts())
+
+        self.state.report = build_report(
+            identity=e,
+            sources_table=sources_table,
+            rejected_urls=rejected,
+            not_found=selection.not_found,
+            facts=facts,
+            facts_problem=facts_problem,
+            note=note,
+            unverified_numbers=unverified,
+        )
 
     @listen(run_research)
     def save_report(self):

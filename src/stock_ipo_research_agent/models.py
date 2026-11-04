@@ -38,3 +38,9 @@ class SelectedSources(BaseModel):
 
     urls: list[str]
     not_found: list[str] = []
+
+class AnalystNote(BaseModel):
+    """The financial analyst's output. The figures table itself is built by code."""
+
+    report_url: str | None = None  # the annual report URL given to the tool, or None
+    notes: str
