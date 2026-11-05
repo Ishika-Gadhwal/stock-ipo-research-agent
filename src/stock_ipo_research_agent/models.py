@@ -50,3 +50,8 @@ class Narrative(BaseModel):
     """The report writer's output: a short summary. Its numbers are checked by code."""
 
     summary: str
+
+class ReportChoice(BaseModel):
+    """The report picker's output: only which annual report URL to read."""
+
+    report_url: str | None = None  # a URL from the selected sources, or None

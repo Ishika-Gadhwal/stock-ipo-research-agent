@@ -16,17 +16,11 @@ source_discovery_task:
     not find, such as "latest annual report" (not_found).
   agent: company_researcher
 
-analysis_task:
+pick_report_task:
   description: >
     From the sources selected in the previous task, pick the URL of the latest
-    annual report PDF for {company}, copied exactly. Call the "Annual report
-    figures" tool once with that URL. Then write short notes (at most 5
-    sentences) that use ONLY figures the tool returned, exactly as shown, and
-    say whether each is consolidated or standalone. Do NOT calculate
-    percentages, differences or averages, and do NOT write any number the tool
-    did not return. If there is no annual report URL among the selected
-    sources, or the tool refuses or cannot extract, set report_url to null and
-    say so in the notes.
+    annual report PDF for {company}, copied exactly. If none of them is an
+    annual report PDF, set report_url to null. Do NOT state any figures.
   expected_output: >
-    report_url: the exact URL you gave the tool, or null. notes: the short notes.
-  agent: financial_analyst
+    report_url: the exact URL you picked, or null.
+  agent: report_picker

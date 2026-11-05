@@ -7,7 +7,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # reuse the other test
 from test_financial_facts import COMPANY, URL, FakeLoader  # noqa: E402
 from test_statement_extractor import CONSOLIDATED_PAGE, STANDALONE_PAGE  # noqa: E402
 
-from stock_ipo_research_agent.models import AnalystNote  # noqa: E402
 from stock_ipo_research_agent.report import build_report, empty_facts  # noqa: E402
 from stock_ipo_research_agent.tools.financial_facts import extract_pl_facts  # noqa: E402
 
@@ -21,7 +20,7 @@ def report(**overrides):
     args = dict(
         identity=COMPANY, sources_table=TABLE, rejected_urls=[], not_found=[],
         facts=FACTS, facts_problem=None,
-        note=AnalystNote(report_url=URL, notes="Consolidated revenue was 335,582 crore."),
+        summary="Consolidated revenue was 335,582 crore.",        
         unverified_numbers=[],
     )
     args.update(overrides)
@@ -74,9 +73,9 @@ class ReportTests(unittest.TestCase):
         without = report(facts=None, facts_problem="Nothing found.")
         self.assertIn("Reason: Nothing found.", without)
 
-    def test_missing_note_is_stated(self) -> None:
-        self.assertIn("The analyst returned no notes.", report(note=None))
-
+    def test_missing_summary_is_stated(self) -> None:
+        self.assertIn("No summary was written.", report(summary=None))
+        
     def test_empty_facts_allow_no_numbers(self) -> None:
         self.assertEqual(empty_facts().figures, [])
 

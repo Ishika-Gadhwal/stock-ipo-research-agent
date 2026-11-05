@@ -8,7 +8,7 @@ from crewai.flow import Flow, listen, start
 from stock_ipo_research_agent.crews.content_crew.content_crew import ContentCrew
 from stock_ipo_research_agent.crews.identity_crew.identity_crew import IdentityCrew
 from stock_ipo_research_agent.models import CompanyCandidate
-from stock_ipo_research_agent.report import build_report, empty_facts
+from stock_ipo_research_agent.report import build_report
 from stock_ipo_research_agent.tools.financial_facts import (
     extract_pl_facts,
     reset_company,
@@ -18,6 +18,9 @@ from stock_ipo_research_agent.tools.facts_selection import find_facts
 from stock_ipo_research_agent.tools.numbers_check import find_unverified_numbers
 from stock_ipo_research_agent.tools.search import get_search_client, reset_search_client
 from stock_ipo_research_agent.tools.source_checks import build_source_table
+
+from stock_ipo_research_agent.crews.narrative_crew.narrative_crew import NarrativeCrew
+from stock_ipo_research_agent.tools.narrative_input import build_writer_input
 
 
 class ResearchState(BaseModel):
@@ -84,24 +87,32 @@ class ResearchFlow(Flow[ResearchState]):
         company = f"{e.legal_name} (NSE: {e.nse_symbol}, BSE: {e.bse_code}, ISIN: {e.isin})"
         result = ContentCrew().crew().kickoff(inputs={"company": company})
 
-        # Task 1 = source finder, task 2 = financial analyst.
+        # Task 1 = source finder, task 2 = report picker.
         selection = result.tasks_output[0].pydantic
-        note = result.tasks_output[1].pydantic
+        choice = result.tasks_output[1].pydantic
         if selection is None:
             raise ValueError("The research step did not return a structured list of sources.")
 
         client = get_search_client()
         sources_table, rejected = build_source_table(selection.urls, client)
 
-        # Figures come from code, never from the analyst's words. The analyst picks the
-        # report; if that fails, code falls back to annual-report PDFs found by search.
-        report_url = note.report_url if note else None
+        # Figures come from code. The picker chooses the report; if that fails,
+        # code falls back to annual-report PDFs found by search.
+        report_url = choice.report_url if choice else None
         facts, facts_notes = find_facts(client, e, report_url, extract=extract_pl_facts)
         facts_problem = " ".join(facts_notes) or None
 
+        # The writer runs only when code extracted figures. Its numbers are checked.
+        summary: str | None = None
         unverified: list[str] = []
-        if note:
-            unverified = find_unverified_numbers(note.notes, facts or empty_facts())
+        if facts is not None and facts.figures:
+            written = NarrativeCrew().crew().kickoff(
+                inputs={"company": e.legal_name, "facts_text": build_writer_input(facts)}
+            )
+            narrative = written.tasks_output[0].pydantic
+            summary = narrative.summary if narrative else None
+            if summary:
+                unverified = find_unverified_numbers(summary, facts)
 
         self.state.report = build_report(
             identity=e,
@@ -110,10 +121,11 @@ class ResearchFlow(Flow[ResearchState]):
             not_found=selection.not_found,
             facts=facts,
             facts_problem=facts_problem,
-            note=note,
+            summary=summary,
             unverified_numbers=unverified,
         )
 
+        
     @listen(run_research)
     def save_report(self):
         output_dir = Path("output")

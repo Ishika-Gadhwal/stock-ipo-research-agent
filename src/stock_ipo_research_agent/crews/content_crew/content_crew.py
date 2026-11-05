@@ -2,14 +2,13 @@ from crewai import Agent, Crew, Process, Task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from crewai.project import CrewBase, agent, crew, task
 
-from stock_ipo_research_agent.models import AnalystNote, SelectedSources
-from stock_ipo_research_agent.tools.financial_facts_tool import FinancialFactsTool
+from stock_ipo_research_agent.models import ReportChoice, SelectedSources
 from stock_ipo_research_agent.tools.source_search_tool import SourceSearchTool
 
 
 @CrewBase
 class ContentCrew:
-    """Source finder, then financial analyst. The second task reads the first one's output."""
+    """Source finder, then report picker. The second task reads the first one's output."""
 
     agents: list[BaseAgent]
     tasks: list[Task]
@@ -26,11 +25,11 @@ class ContentCrew:
         )
 
     @agent
-    def financial_analyst(self) -> Agent:
+    def report_picker(self) -> Agent:
         return Agent(
-            config=self.agents_config["financial_analyst"],  # type: ignore[index]
-            tools=[FinancialFactsTool()],
-            max_iter=4,
+            config=self.agents_config["report_picker"],  # type: ignore[index]
+            tools=[],  # WHY: it only chooses a URL. Code reads the PDF.
+            max_iter=2,
         )
 
     @task
@@ -41,11 +40,11 @@ class ContentCrew:
         )
 
     @task
-    def analysis_task(self) -> Task:
+    def pick_report_task(self) -> Task:
         return Task(
-            config=self.tasks_config["analysis_task"],  # type: ignore[index]
-            context=[self.source_discovery_task()],  # WHY: the analyst reads the source finder's URLs
-            output_pydantic=AnalystNote,
+            config=self.tasks_config["pick_report_task"],  # type: ignore[index]
+            context=[self.source_discovery_task()],  # WHY: the picker reads the finder's URLs
+            output_pydantic=ReportChoice,
         )
 
     @crew

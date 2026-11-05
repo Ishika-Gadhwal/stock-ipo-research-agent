@@ -6,7 +6,7 @@ by an LLM, so they are labelled as such and checked against the extracted figure
 
 from __future__ import annotations
 
-from stock_ipo_research_agent.models import AnalystNote, CompanyCandidate
+from stock_ipo_research_agent.models import CompanyCandidate
 from stock_ipo_research_agent.tools.financial_facts import FinancialFacts
 
 DISCLAIMER = (
@@ -46,7 +46,7 @@ def build_report(
     not_found: list[str],
     facts: FinancialFacts | None,
     facts_problem: str | None,
-    note: AnalystNote | None,
+    summary: str | None,
     unverified_numbers: list[str],
 ) -> str:
     lines = [
@@ -90,17 +90,17 @@ def build_report(
         label = "Note" if facts is not None and facts.figures else "Reason"
         lines += ["", f"{label}: {facts_problem}"]
 
-    lines += ["", "## Analyst notes (written by an LLM; check against the table above)", ""]
-    if note is None:
-        lines.append("The analyst returned no notes.")
+    lines += ["", "## Summary (written by an LLM; check against the table above)", ""]
+    if summary is None:
+        lines.append("No summary was written.")
     else:
-        lines.append(note.notes)
+        lines.append(summary)
         lines.append("")
         if unverified_numbers:
             lines.append(
-                "**Warning:** these numbers appear in the notes but were not extracted "
+                "**Warning:** these numbers appear in the summary but were not extracted "
                 "by code: " + ", ".join(unverified_numbers)
             )
         else:
-            lines.append("Number check: no unverified numbers found in the notes.")
+            lines.append("Number check: no unverified numbers found in the summary.")
     return "\n".join(lines) + "\n"

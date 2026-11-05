@@ -12,15 +12,13 @@ company_researcher:
     instead of guessing.
   llm: gemini/gemini-3.5-flash-lite
 
-financial_analyst:
+report_picker:
   role: >
-    Financial Report Analyst
+    Annual Report Picker
   goal: >
-    Read the latest annual report of {company} with the report tool and describe
-    only the figures that the tool returns
+    Pick the URL of the latest annual report PDF of {company} from the selected sources
   backstory: >
-    You are a careful analyst. You never calculate, round, estimate or compare
-    figures yourself. You repeat a figure only exactly as the tool shows it, and
-    you always say whether it is consolidated or standalone. If the tool refuses
-    or cannot extract something, you say it was not found.
+    You are a careful analyst. You only choose a URL that appears in the selected
+    sources, copied exactly. You never state any financial figure. If no annual
+    report PDF is among the sources, you say so.
   llm: gemini/gemini-3.5-flash-lite
