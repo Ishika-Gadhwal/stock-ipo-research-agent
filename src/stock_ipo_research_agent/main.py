@@ -3,12 +3,12 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from crewai.flow import Flow, listen, start
+from crewai.flow import Flow, listen, start ,or_, router
 
 from stock_ipo_research_agent.crews.content_crew.content_crew import ContentCrew
 from stock_ipo_research_agent.crews.identity_crew.identity_crew import IdentityCrew
 from stock_ipo_research_agent.models import CompanyCandidate
-from stock_ipo_research_agent.report import build_report
+from stock_ipo_research_agent.report import DISCLAIMER, build_report
 from stock_ipo_research_agent.tools.financial_facts import (
     extract_pl_facts,
     reset_company,
@@ -23,8 +23,20 @@ from stock_ipo_research_agent.crews.narrative_crew.narrative_crew import Narrati
 from stock_ipo_research_agent.tools.narrative_input import build_writer_input
 
 
+MODES = ("stock", "ipo")
+
+
+def normalise_mode(value: str | None) -> str:
+    """Return 'stock' or 'ipo'. Anything else is an error, never a silent default."""
+    mode = (value or "stock").strip().lower()
+    if mode not in MODES:
+        raise ValueError(f"Unknown mode {value!r}. Use one of: {', '.join(MODES)}.")
+    return mode
+
+
 class ResearchState(BaseModel):
     company: str = "Tata Motors"
+    mode: str = "stock"
     candidates: list[CompanyCandidate] = []
     identity: CompanyCandidate | None = None
     report: str = ""
@@ -40,10 +52,24 @@ class ResearchFlow(Flow[ResearchState]):
             self.state.company = crewai_trigger_payload.get(
                 "company", self.state.company
             )
-        print(f"Company: {self.state.company}")
+            self.state.mode = normalise_mode(crewai_trigger_payload.get("mode"))
+        print(f"Company: {self.state.company} | Mode: {self.state.mode}")
 
-    @listen(prepare_request)
-    def resolve_identity(self):
+    @router(prepare_request)
+    def choose_path(self):
+        # Code decides the path, never the LLM.
+        return self.state.mode
+
+    @listen("ipo")
+    def ipo_stub(self):
+        # WHY: the IPO path is built in a later step. Say so plainly instead of guessing.
+        self.state.report = (
+            f"# IPO research: {self.state.company}\n\n*{DISCLAIMER}*\n\n"
+            "The IPO path is not built yet. No research was done.\n"
+        )
+
+    @listen("stock")
+    def resolve_identity(self):        
         result = IdentityCrew().crew().kickoff(
             inputs={"company": self.state.company}
         )
@@ -125,8 +151,8 @@ class ResearchFlow(Flow[ResearchState]):
             unverified_numbers=unverified,
         )
 
-        
-    @listen(run_research)
+
+    @listen(or_(run_research, ipo_stub))
     def save_report(self):
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
