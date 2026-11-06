@@ -2,21 +2,23 @@
 
 No LLM. Works on the list of page strings that AnnualReportReader extracts.
 
-Rules (learned from the TMPV FY26 integrated report):
-1. A statement page's text STARTS with the statement title, and "in crore"
-   appears near the start. Notes pages start with "notes forming part of ...",
-   and sub-tables start with "b. statement of ..." or "re-presented ...",
-   so anchoring at the very start rejects them.
-2. A leading "consolidated" gives the basis. No prefix means standalone
-   (this report's convention; verify on other companies).
-3. A page that repeats the same heading right after the previous page is the
-   same statement (332/333, 334/335).
-4. A page right after a statement page that starts with "(INR in crores)" and
-   has no title is a continuation (standalone cash flow, 458). Capped so a
-   notes page cannot be swallowed.
+Rules (learned from TMPV, then widened after checking 9 other large companies):
+1. The statement title must appear near the START of the page. A short page header
+   (report name, page number, "Financial Statements") may come first, so the title
+   may start up to 150 characters in. A title that follows words such as "notes",
+   "auditor", "b." or "the" is a mention or a sub-table and is rejected. A unit word (crore, million or lakh) must follow within 450 characters.
+2. A leading "consolidated" gives the basis. "standalone", or no prefix, means
+   standalone.
+3. For a page that STARTS a profit and loss, it must also contain "total income" and
+   "revenue from operations", which rejects contents pages and notes pages. A page that
+   repeats the previous statement's heading is exempt (it is the continuation).
+4. A page that repeats the same heading right after the previous page is the same
+   statement (332/333, 334/335).
+5. A page right after a statement page that starts with a unit line and has no title
+   is a continuation. Capped so a notes page cannot be swallowed.
 
-Known limitation: "statement of changes in equity" pages are rotated in this PDF
-and extract as reversed text, so they are deliberately not located.
+Known limits: two-page spreads (two printed pages on one wide PDF page) are not
+split yet. Statement of changes in equity pages are deliberately not located.
 """
 
 from __future__ import annotations
@@ -37,10 +39,22 @@ _TITLES = {
     "statement of cash flows": CASH_FLOW,
 }
 _TITLE = re.compile(
-    r"^(consolidated\s+)?(balance sheet|statement of profit and loss|statement of cash flows)\b"
+    r"(consolidated\s+|standalone\s+)?"
+    r"(balance sheet|statement of profit and loss|statement of cash flows)\b"
 )
-_CONTINUATION = re.compile(r"^\(\s*\u20b9\s*in\s*crores?\s*\)")
-_UNIT_WINDOW = 200
+_TITLE_START_LIMIT = 150  # chars of page header allowed before the title
+# Words before a title that mean it is a mention or a sub-table, not the statement itself.
+_NOT_A_TITLE_PREFIX = re.compile(
+    r"\b(notes?|re-?presented|restated|auditor\S*|independent|forming|following|contd)\b"
+    r"|\b[a-z][.)]\s*$"  # "b. Statement of ..." / "d) Statement of ..."
+    r"|\b(the|of|in|to|see|refer|and|for|our|an?)\s*$"  # prose such as "see the Balance Sheet"
+)
+_UNIT_WORD = re.compile(r"\b(?:crores?|million|lakhs?)\b")
+_UNIT_WINDOW = 450  # chars after the title in which the unit word must appear
+# The rupee sign often extracts as a stray letter, so only the unit word is relied on.
+_CONTINUATION = re.compile(
+    r"^\(\s*(?:\S{0,3}\s*)?(?:in\s*)?(?:\S{0,3}\s*)?(?:crores?|million|lakhs?)\b"
+)
 
 
 @dataclass(frozen=True)
@@ -62,13 +76,31 @@ def locate_statements(pages: list[str], max_continuation: int = 2) -> list[State
     extra = 0
     for number, text in enumerate(pages, start=1):
         flat = _flatten(text)
-        match = _TITLE.match(flat)
+        match = _TITLE.search(flat)
+        if match and (
+            match.start() > _TITLE_START_LIMIT
+            or _NOT_A_TITLE_PREFIX.search(flat[: match.start()])
+        ):
+            match = None
         previous = found[-1] if found else None
         contiguous = previous is not None and previous[2][-1] == number - 1
 
-        if match and "in crore" in flat[:_UNIT_WINDOW]:
-            statement = _TITLES[match.group(2)]
-            basis = CONSOLIDATED if match.group(1) else STANDALONE
+        statement = _TITLES[match.group(2)] if match else None
+        basis = None
+        accepted = False
+        if match and _UNIT_WORD.search(flat[match.start() : match.start() + _UNIT_WINDOW]):
+            basis = CONSOLIDATED if (match.group(1) or "").strip() == "consolidated" else STANDALONE
+            repeat = contiguous and (previous[0], previous[1]) == (statement, basis)
+            # The income-rows check is for a page that STARTS a profit and loss. A page that
+            # repeats the previous statement's heading is its continuation (332/333) and may
+            # hold only the lower rows.
+            accepted = (
+                statement != PROFIT_AND_LOSS
+                or repeat
+                or ("total income" in flat and "revenue from operations" in flat)
+            )
+
+        if accepted:
             if contiguous and (previous[0], previous[1]) == (statement, basis):
                 previous[2].append(number)
             else:

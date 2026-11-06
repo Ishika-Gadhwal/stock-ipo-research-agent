@@ -22,8 +22,8 @@ class SyntheticTests(unittest.TestCase):
         pages = [
             "cover",
             f"Consolidated Balance Sheet ({R} in crores) as at March 31",
-            f"Consolidated Statement of Profit and Loss ({R} in crores) year ended",
-            f"Consolidated Statement of Profit and Loss ({R} in crores) year ended",
+            f"Consolidated Statement of Profit and Loss ({R} in crores) Revenue from operations Total income",
+            f"Consolidated Statement of Profit and Loss ({R} in crores) Revenue from operations Total income",
             f"Balance Sheet ({R} in crores) as at March 31",
         ]
         self.assertEqual(
