@@ -76,7 +76,10 @@ def fake_extract(url, company):
 
 
 class FlowTests(unittest.TestCase):
-    def run_flow(self, content, client=None, summary=GOOD_SUMMARY, writer=None, fallback=None):
+    def run_flow(
+        self, content, client=None, summary=GOOD_SUMMARY, writer=None, fallback=None,
+        content_crew=None,
+    ):
         client = client or client_that_saw()
         self.writer = writer or fake_crew(writer_output(summary))
         self.fallback = fallback or fake_crew(web_output("Nothing found.", []))
@@ -86,7 +89,8 @@ class FlowTests(unittest.TestCase):
             os.chdir(tmp)
             try:
                 with mock.patch.object(main, "IdentityCrew", fake_crew(identity)), \
-                     mock.patch.object(main, "ContentCrew", fake_crew(content)), \
+                     mock.patch.object(main, "ContentCrew", content_crew or fake_crew(content)), \
+                     mock.patch.object(main.time, "sleep"), \
                      mock.patch.object(main, "NarrativeCrew", self.writer), \
                      mock.patch.object(main, "WebFallbackCrew", self.fallback), \
                      mock.patch.object(main, "get_search_client", return_value=client), \
@@ -180,6 +184,20 @@ class FlowTests(unittest.TestCase):
         self.assertIn("| Consolidated | Total revenue from operations | March 31, 2026 | 335,582 | 2 |", text)
         self.assertIn("No summary was written. Reason: the writer failed. RuntimeError", text)
         self.fallback.assert_not_called()
+
+    def test_content_crew_that_hits_a_503_once_is_retried_and_the_report_is_complete(self) -> None:
+        flaky = mock.Mock()
+        flaky.return_value.crew.return_value.kickoff.side_effect = [
+            RuntimeError("503 UNAVAILABLE. This model is currently experiencing high demand."),
+            content_output([URL], URL),
+        ]
+        text = self.run_flow(None, content_crew=flaky)
+        self.assertEqual(flaky.return_value.crew.return_value.kickoff.call_count, 2)
+        self.assertIn("| Consolidated | Total revenue from operations | March 31, 2026 | 335,582 | 2 |", text)
+
+    def test_content_crew_that_keeps_failing_stops_the_run_visibly(self) -> None:
+        with self.assertRaises(RuntimeError):
+            self.run_flow(None, content_crew=crashing_crew("503 UNAVAILABLE"))
 
     def test_source_url_that_no_search_returned_is_rejected(self) -> None:
         text = self.run_flow(content_output([URL, "https://invented.example/x"], URL))

@@ -6,6 +6,8 @@ by an LLM, so they are labelled as such and checked against the extracted figure
 
 from __future__ import annotations
 
+from datetime import date
+
 from stock_ipo_research_agent.models import CompanyCandidate
 from stock_ipo_research_agent.tools.financial_facts import FinancialFacts
 
@@ -38,6 +40,16 @@ def figures_table(facts: FinancialFacts) -> str:
     return "\n".join(lines)
 
 
+def data_status(facts: FinancialFacts | None, web_summary: str | None) -> str:
+    """One line a reader can trust at a glance: where the numbers in this report come from."""
+    if facts is not None and facts.figures:
+        note = " (some statements could not be read)" if facts.problems else ""
+        return "verified figures extracted from the annual report" + note
+    if web_summary:
+        return "no verified figures; an UNVERIFIED web summary is included"
+    return "no figures found"
+
+
 def build_report(
     *,
     identity: CompanyCandidate,
@@ -54,6 +66,7 @@ def build_report(
     web_untraced: list[str] | None = None,
     web_note: str | None = None,
     web_quarter: list[str] | None = None,
+    report_date: str | None = None,
 ) -> str:
     lines = [
         f"# Research notes: {identity.legal_name}",
@@ -62,9 +75,15 @@ def build_report(
         "",
         f"*{DISCLAIMER}*",
         "",
+        f"Report date: {report_date or date.today().isoformat()} | "
+        f"Data status: {data_status(facts, web_summary)}",
+        "",
         "## Sources found by search",
         "",
         sources_table,
+        "",
+        '*"official" means the link is on an exchange or SEBI website. '
+        "It does not prove the document belongs to this company.*",
     ]
     if rejected_urls:
         lines += ["", "Rejected URLs (not found in any search result):", ""]

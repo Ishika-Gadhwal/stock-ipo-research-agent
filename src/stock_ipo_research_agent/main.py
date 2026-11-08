@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import time
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -31,6 +32,39 @@ from stock_ipo_research_agent.tools.narrative_input import build_writer_input
 MODES = ("stock", "ipo")
 
 
+_TRANSIENT_WORDS = (
+    "503", "429", "unavailable", "high demand", "overloaded", "rate limit",
+    "resource_exhausted", "timed out", "timeout", "temporarily",
+)
+_RETRY_WAITS = (5, 20)  # seconds to wait before attempt 2 and attempt 3
+
+
+def _is_transient(error: Exception) -> bool:
+    """True for errors that usually pass by themselves (model busy, rate limit, timeout)."""
+    text = f"{type(error).__name__} {error}".lower()
+    return any(word in text for word in _TRANSIENT_WORDS)
+
+
+def _run_with_retry(crew_class, inputs: dict, waits: tuple[int, ...] = _RETRY_WAITS):
+    """Run a crew. Retry only temporary model errors. Anything else raises at once.
+
+    Note: a retry repeats the whole crew, including its searches, so it can cost credits.
+    """
+    attempts = len(waits) + 1
+    for attempt in range(attempts):
+        try:
+            return crew_class().crew().kickoff(inputs=inputs)
+        except Exception as error:  # noqa: BLE001
+            if attempt == attempts - 1 or not _is_transient(error):
+                raise
+            wait = waits[attempt]
+            print(
+                f"Temporary model error ({type(error).__name__}). "
+                f"Retrying in {wait} seconds (attempt {attempt + 2} of {attempts})."
+            )
+            time.sleep(wait)
+
+
 def _kickoff(crew_class, inputs: dict):
     """Run a summary crew. Returns (output, None) or (None, short error text).
 
@@ -38,7 +72,7 @@ def _kickoff(crew_class, inputs: dict):
     above all must never lose figures that code already extracted.
     """
     try:
-        return crew_class().crew().kickoff(inputs=inputs), None
+        return _run_with_retry(crew_class, inputs), None
     except Exception as error:  # noqa: BLE001
         return None, f"{type(error).__name__}: {str(error)[:200]} (see the terminal for details)"
 
@@ -87,9 +121,7 @@ class ResearchFlow(Flow[ResearchState]):
 
     @listen("stock")
     def resolve_identity(self):        
-        result = IdentityCrew().crew().kickoff(
-            inputs={"company": self.state.company}
-        )
+        result = _run_with_retry(IdentityCrew, {"company": self.state.company})
         self.state.candidates = result.pydantic.candidates
 
     @listen(resolve_identity)
@@ -128,7 +160,7 @@ class ResearchFlow(Flow[ResearchState]):
     def run_research(self):
         e = self.state.identity
         company = f"{e.legal_name} (NSE: {e.nse_symbol}, BSE: {e.bse_code}, ISIN: {e.isin})"
-        result = ContentCrew().crew().kickoff(inputs={"company": company})
+        result = _run_with_retry(ContentCrew, {"company": company})
 
         # Task 1 = source finder, task 2 = report picker.
         selection = result.tasks_output[0].pydantic
