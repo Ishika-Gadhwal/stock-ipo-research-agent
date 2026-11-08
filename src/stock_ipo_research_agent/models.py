@@ -55,3 +55,9 @@ class ReportChoice(BaseModel):
     """The report picker's output: only which annual report URL to read."""
 
     report_url: str | None = None  # a URL from the selected sources, or None
+
+class WebSummary(BaseModel):
+    """The web researcher's output. UNVERIFIED: written from search snippets, not the PDF."""
+
+    summary: str
+    source_urls: list[str] = []

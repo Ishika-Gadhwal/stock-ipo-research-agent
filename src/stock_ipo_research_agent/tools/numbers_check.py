@@ -52,3 +52,31 @@ def find_unverified_numbers(text: str, facts: FinancialFacts) -> list[str]:
             continue
         flagged.append(token)
     return flagged
+
+
+def numbers_in(text: str) -> list[tuple[str, Decimal]]:
+    """Every number in text as (token, value). Dates, years and fiscal-year labels are skipped."""
+    cleaned = text
+    for pattern in _IGNORED:
+        cleaned = pattern.sub(" ", cleaned)
+    found = []
+    for match in _NUMBER.finditer(cleaned):
+        token = match.group(0).strip().rstrip(",")
+        value = _to_decimal(token)
+        if value is not None:
+            found.append((token, value))
+    return found
+
+
+def find_untraced_numbers(text: str, corpus: str) -> list[str]:
+    """Numbers in text that appear nowhere in corpus (the search snippets of this run).
+
+    This is a weaker check than find_unverified_numbers. It shows a number was
+    printed in a search result. It does not show the number is right.
+    """
+    traced = {abs(value) for _, value in numbers_in(corpus)}
+    flagged: list[str] = []
+    for token, value in numbers_in(text):
+        if abs(value) not in traced and token not in flagged:
+            flagged.append(token)
+    return flagged

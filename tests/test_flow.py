@@ -20,7 +20,9 @@ from stock_ipo_research_agent.models import (  # noqa: E402
     Narrative,
     ReportChoice,
     SelectedSources,
+    WebSummary,
 )
+from stock_ipo_research_agent.tools.search import SearchClient  # noqa: E402
 from stock_ipo_research_agent.tools.financial_facts import extract_pl_facts  # noqa: E402
 
 PAGES = ["cover", CONSOLIDATED_PAGE, STANDALONE_PAGE]
@@ -47,14 +49,37 @@ def writer_output(summary):
     return SimpleNamespace(tasks_output=[SimpleNamespace(pydantic=Narrative(summary=summary))])
 
 
+def web_output(summary, urls):
+    return SimpleNamespace(
+        tasks_output=[SimpleNamespace(pydantic=WebSummary(summary=summary, source_urls=urls))]
+    )
+
+
+def crashing_crew(message="503 busy"):
+    holder = mock.Mock()
+    holder.return_value.crew.return_value.kickoff.side_effect = RuntimeError(message)
+    return holder
+
+
+def client_with_snippet(url, snippet):
+    session = mock.Mock()
+    session.post.return_value.json.return_value = {
+        "organic": [{"title": "News", "link": url, "snippet": snippet}]
+    }
+    client = SearchClient(api_key="k", session=session)
+    client.search("annual results")
+    return client
+
+
 def fake_extract(url, company):
     return extract_pl_facts(url, company, loader=FakeLoader(PAGES))
 
 
 class FlowTests(unittest.TestCase):
-    def run_flow(self, content, client=None, summary=GOOD_SUMMARY):
+    def run_flow(self, content, client=None, summary=GOOD_SUMMARY, writer=None, fallback=None):
         client = client or client_that_saw()
-        self.writer = fake_crew(writer_output(summary))
+        self.writer = writer or fake_crew(writer_output(summary))
+        self.fallback = fallback or fake_crew(web_output("Nothing found.", []))
         identity = SimpleNamespace(pydantic=IdentityResult(candidates=[COMPANY]))
         with tempfile.TemporaryDirectory() as tmp:
             previous = os.getcwd()
@@ -63,6 +88,7 @@ class FlowTests(unittest.TestCase):
                 with mock.patch.object(main, "IdentityCrew", fake_crew(identity)), \
                      mock.patch.object(main, "ContentCrew", fake_crew(content)), \
                      mock.patch.object(main, "NarrativeCrew", self.writer), \
+                     mock.patch.object(main, "WebFallbackCrew", self.fallback), \
                      mock.patch.object(main, "get_search_client", return_value=client), \
                      mock.patch.object(main, "reset_search_client"), \
                      mock.patch.object(main, "extract_pl_facts", side_effect=fake_extract), \
@@ -115,6 +141,45 @@ class FlowTests(unittest.TestCase):
         self.assertIn("No summary was written.", text)
         self.assertNotIn("| Basis |", text)
         self.writer.assert_not_called()
+
+    def test_verified_figures_never_start_the_web_fallback(self) -> None:
+        text = self.run_flow(content_output([URL], URL))
+        self.fallback.assert_not_called()
+        self.assertNotIn("UNVERIFIED", text)
+
+    def test_no_figures_gives_a_labelled_unverified_web_summary_with_checked_numbers(self) -> None:
+        page = "https://example.com/investor-relations"
+        news = "https://news.example/results"
+        client = client_with_snippet(news, "The company reported revenue of 1,234 crore.")
+        client.search("again")  # keeps the same result; the page URL is added below
+        client._seen[page] = client.lookup(news)
+        fallback = fake_crew(web_output(
+            "Revenue was 1,234 crore and profit was 99 crore.",
+            [news, "https://invented.example/z"],
+        ))
+        text = self.run_flow(content_output([page], None), client=client, fallback=fallback)
+        self.assertIn("## Web search summary (UNVERIFIED)", text)
+        self.assertIn("Revenue was 1,234 crore and profit was 99 crore.", text)
+        self.assertIn("- https://news.example/results", text)
+        self.assertNotIn("invented.example", text)
+        warning = [line for line in text.splitlines() if line.startswith("**Warning:**")]
+        self.assertEqual(len(warning), 1)
+        self.assertIn("99", warning[0])
+        self.assertNotIn("1,234", warning[0])
+
+    def test_a_crashing_web_fallback_still_saves_the_report(self) -> None:
+        page = "https://example.com/investor-relations"
+        text = self.run_flow(
+            content_output([page], None), client=client_that_saw(page), fallback=crashing_crew()
+        )
+        self.assertIn("No figures were extracted.", text)
+        self.assertIn("The web search fallback could not run. RuntimeError", text)
+
+    def test_a_crashing_writer_keeps_the_verified_figures(self) -> None:
+        text = self.run_flow(content_output([URL], URL), writer=crashing_crew())
+        self.assertIn("| Consolidated | Total revenue from operations | March 31, 2026 | 335,582 | 2 |", text)
+        self.assertIn("No summary was written. Reason: the writer failed. RuntimeError", text)
+        self.fallback.assert_not_called()
 
     def test_source_url_that_no_search_returned_is_rejected(self) -> None:
         text = self.run_flow(content_output([URL, "https://invented.example/x"], URL))

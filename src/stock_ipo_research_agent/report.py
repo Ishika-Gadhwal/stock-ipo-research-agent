@@ -48,6 +48,11 @@ def build_report(
     facts_problem: str | None,
     summary: str | None,
     unverified_numbers: list[str],
+    summary_note: str | None = None,
+    web_summary: str | None = None,
+    web_sources: list[str] | None = None,
+    web_untraced: list[str] | None = None,
+    web_note: str | None = None,
 ) -> str:
     lines = [
         f"# Research notes: {identity.legal_name}",
@@ -92,7 +97,7 @@ def build_report(
 
     lines += ["", "## Summary (written by an LLM; check against the table above)", ""]
     if summary is None:
-        lines.append("No summary was written.")
+        lines.append("No summary was written." + (f" Reason: {summary_note}" if summary_note else ""))
     else:
         lines.append(summary)
         lines.append("")
@@ -103,4 +108,34 @@ def build_report(
             )
         else:
             lines.append("Number check: no unverified numbers found in the summary.")
+
+    if web_summary or web_note:
+        lines += [
+            "",
+            "## Web search summary (UNVERIFIED)",
+            "",
+            "**UNVERIFIED: this text comes from web search snippets, not from the annual "
+            "report. Check every statement against the sources before relying on it.**",
+            "",
+        ]
+        if web_summary:
+            lines += [web_summary, ""]
+            if web_sources:
+                lines += ["Sources (each was returned by a search):", ""]
+                lines += [f"- {url}" for url in web_sources]
+            else:
+                lines.append("No source URL could be confirmed against the search results.")
+            lines.append("")
+            if web_untraced:
+                lines.append(
+                    "**Warning:** these numbers do not appear in any search snippet from this "
+                    "run: " + ", ".join(web_untraced)
+                )
+            else:
+                lines.append(
+                    "Number check: every number in this text appears in a search snippet. "
+                    "This does not make it correct."
+                )
+        if web_note:
+            lines += ["", web_note]
     return "\n".join(lines) + "\n"

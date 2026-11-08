@@ -15,15 +15,31 @@ from stock_ipo_research_agent.tools.financial_facts import (
     set_company,
 )
 from stock_ipo_research_agent.tools.facts_selection import find_facts
-from stock_ipo_research_agent.tools.numbers_check import find_unverified_numbers
+from stock_ipo_research_agent.tools.numbers_check import (
+    find_unverified_numbers,
+    find_untraced_numbers,
+)
 from stock_ipo_research_agent.tools.search import get_search_client, reset_search_client
 from stock_ipo_research_agent.tools.source_checks import build_source_table
 
 from stock_ipo_research_agent.crews.narrative_crew.narrative_crew import NarrativeCrew
+from stock_ipo_research_agent.crews.web_fallback_crew.web_fallback_crew import WebFallbackCrew
 from stock_ipo_research_agent.tools.narrative_input import build_writer_input
 
 
 MODES = ("stock", "ipo")
+
+
+def _kickoff(crew_class, inputs: dict):
+    """Run a summary crew. Returns (output, None) or (None, short error text).
+
+    WHY: a failed summary (for example a Gemini 503) must never lose the report, and
+    above all must never lose figures that code already extracted.
+    """
+    try:
+        return crew_class().crew().kickoff(inputs=inputs), None
+    except Exception as error:  # noqa: BLE001
+        return None, f"{type(error).__name__}: {str(error)[:200]} (see the terminal for details)"
 
 
 def normalise_mode(value: str | None) -> str:
@@ -130,15 +146,40 @@ class ResearchFlow(Flow[ResearchState]):
 
         # The writer runs only when code extracted figures. Its numbers are checked.
         summary: str | None = None
+        summary_note: str | None = None
         unverified: list[str] = []
         if facts is not None and facts.figures:
-            written = NarrativeCrew().crew().kickoff(
-                inputs={"company": e.legal_name, "facts_text": build_writer_input(facts)}
+            written, error = _kickoff(
+                NarrativeCrew,
+                {"company": e.legal_name, "facts_text": build_writer_input(facts)},
             )
-            narrative = written.tasks_output[0].pydantic
-            summary = narrative.summary if narrative else None
-            if summary:
-                unverified = find_unverified_numbers(summary, facts)
+            if error:
+                summary_note = f"the writer failed. {error}"
+            else:
+                narrative = written.tasks_output[0].pydantic
+                summary = narrative.summary if narrative else None
+                if summary:
+                    unverified = find_unverified_numbers(summary, facts)
+
+        # Only when code could not read ANY figures: a web-search summary, labelled
+        # UNVERIFIED, so the report is never empty. Numbers are traced to search snippets.
+        web_summary: str | None = None
+        web_sources: list[str] = []
+        web_untraced: list[str] = []
+        web_note: str | None = None
+        if facts is None or not facts.figures:
+            researched, error = _kickoff(WebFallbackCrew, {"company": company})
+            if error:
+                web_note = f"The web search fallback could not run. {error}"
+            else:
+                found = researched.tasks_output[0].pydantic
+                if found is not None and found.summary.strip():
+                    web_summary = found.summary
+                    web_sources = [url for url in found.source_urls if client.was_seen(url)]
+                    corpus = "\n".join(f"{r.title} {r.snippet}" for r in client.all_results())
+                    web_untraced = find_untraced_numbers(web_summary, corpus)
+                else:
+                    web_note = "The web search fallback found nothing usable."
 
         self.state.report = build_report(
             identity=e,
@@ -149,6 +190,11 @@ class ResearchFlow(Flow[ResearchState]):
             facts_problem=facts_problem,
             summary=summary,
             unverified_numbers=unverified,
+            summary_note=summary_note,
+            web_summary=web_summary,
+            web_sources=web_sources,
+            web_untraced=web_untraced,
+            web_note=web_note,
         )
 
 

@@ -123,6 +123,10 @@ class SearchClient:
         """The real search result for this URL, or None if no search ever returned it."""
         return self._seen.get(normalise_url(url))
 
+    def all_results(self) -> list[SearchResult]:
+        """Every result returned in this run (used to trace numbers in unverified text)."""
+        return list(self._seen.values())
+
     @property
     def seen_urls(self) -> frozenset[str]:
         return frozenset(self._seen)

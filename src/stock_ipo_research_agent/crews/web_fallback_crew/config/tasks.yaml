@@ -1,0 +1,19 @@
+web_research_task:
+  description: >
+    The annual report of {company} could not be read by code. Use the search tool to
+    find its latest annual results. Use at most 2 searches: 1. the company name with
+    "latest annual results revenue profit" 2. the company name with "annual report
+    highlights". Then write a short summary.
+    Rules:
+    - At most 5 sentences.
+    - Use ONLY facts that appear in the search results.
+    - Copy every figure exactly as written, with its unit and the financial year it
+    belongs to. If a result does not give the unit or the year, say so.
+    - Do NOT calculate anything: no percentages, differences, growth or rounding.
+    - If the results do not give revenue, profit or another item, write "not found"
+    for it.
+    - In source_urls list only URLs that appear in the search results, copied exactly.
+    Do NOT invent or change a URL.
+  expected_output: >
+    summary: the short summary text. source_urls: the exact URLs the summary is based on.
+  agent: web_researcher

@@ -12,7 +12,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # reuse the other test
 os.environ.setdefault("CREWAI_TRACING_ENABLED", "false")
 
 from test_financial_facts import COMPANY, URL, client_that_saw  # noqa: E402
-from test_flow import content_output, fake_crew, fake_extract, writer_output  # noqa: E402
+from test_flow import (  # noqa: E402
+    content_output,
+    fake_crew,
+    fake_extract,
+    web_output,
+    writer_output,
+)
 
 from stock_ipo_research_agent import main  # noqa: E402
 from stock_ipo_research_agent.models import IdentityResult  # noqa: E402
@@ -43,6 +49,7 @@ class RouterFlowTests(unittest.TestCase):
                 with mock.patch.object(main, "IdentityCrew", identity_crew), \
                      mock.patch.object(main, "ContentCrew", content_crew), \
                      mock.patch.object(main, "NarrativeCrew", fake_crew(writer_output("Ok."))), \
+                     mock.patch.object(main, "WebFallbackCrew", fake_crew(web_output("n", []))), \
                      mock.patch.object(main, "get_search_client", return_value=client_that_saw()), \
                      mock.patch.object(main, "reset_search_client"), \
                      mock.patch.object(main, "extract_pl_facts", side_effect=fake_extract), \
