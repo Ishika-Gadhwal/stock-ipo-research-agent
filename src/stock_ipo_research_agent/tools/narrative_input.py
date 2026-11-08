@@ -25,7 +25,7 @@ def build_writer_input(facts: FinancialFacts | None) -> str:
         star = " (comparative column, marked with an asterisk in the report)" if f.starred else ""
         lines.append(
             f"- {f.basis.capitalize()} | {_name(f.key)} | year ended {f.period}{star} "
-            f"| {f.value:,} {f.unit} | PDF page {f.pdf_page}"
+            f"| {f.value:,} {f.unit} | PDF page {f.page_label}"
         )
 
     # Only the basis name of each problem, never the error text (it can contain numbers).

@@ -123,7 +123,7 @@ def format_facts(facts: FinancialFacts) -> str:
         star = " (column marked *)" if f.starred else ""
         lines.append(
             f"- {f.basis.capitalize()} | {_name(f.key)} | year ended {f.period}{star} "
-            f"| {f.value:,} {f.unit} | PDF page {f.pdf_page} | line: {f.source_line}"
+            f"| {f.value:,} {f.unit} | PDF page {f.page_label} | line: {f.source_line}"
         )
     if facts.problems:
         lines += ["", "Could not extract (say 'not found', never estimate):"]

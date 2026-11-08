@@ -26,6 +26,10 @@ def _normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text).casefold()
 
 
+
+SPREAD_BREAK = "\f"  # separates the left and right half of a two-page spread
+_SPREAD_RATIO = 1.2  # a page wider than 1.2 x its height is treated as a spread
+
 class DocumentReaderError(RuntimeError):
     """The document could not safely be downloaded or read."""
 
@@ -157,7 +161,7 @@ class AnnualReportReader:
 
     def _load_pages(self, pdf_bytes: bytes, digest: str) -> list[str]:
         """Extract once (about 90 s for 585 pages), then reuse from the cache."""
-        path = self.cache_dir / f"annual_report_{digest}.pages.json"
+        path = self.cache_dir / f"annual_report_{digest}.pages.v2.json"  # v2: spreads are split in halves
         if path.exists():
             try:
                 pages = json.loads(path.read_text(encoding="utf-8"))
@@ -172,10 +176,28 @@ class AnnualReportReader:
         return pages
 
     @staticmethod
+    def _page_text(page) -> str:
+        """Text of one PDF page.
+
+        A wide page is a two-page spread (two printed pages side by side). Reading it as
+        one block mixes the two pages, so each half is read on its own and the halves are
+        joined with SPREAD_BREAK. A normal page has no break, so its text is unchanged.
+        """
+        if page.width > page.height * _SPREAD_RATIO:
+            x0, top, x1, bottom = page.bbox
+            middle = (x0 + x1) / 2
+            halves = (
+                page.crop((x0, top, middle, bottom)).extract_text() or "",
+                page.crop((middle, top, x1, bottom)).extract_text() or "",
+            )
+            return SPREAD_BREAK.join(halves)
+        return page.extract_text() or ""
+
+    @staticmethod
     def _extract_pages(pdf_bytes: bytes) -> list[str]:
         try:
             with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-                pages = [page.extract_text() or "" for page in pdf.pages]
+                pages = [AnnualReportReader._page_text(page) for page in pdf.pages]
         except Exception as error:
             raise DocumentReaderError(f"Could not extract text from annual report: {error}") from error
         if not pages:

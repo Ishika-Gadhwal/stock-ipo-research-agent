@@ -37,9 +37,11 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
+from stock_ipo_research_agent.tools.annual_report_reader import SPREAD_BREAK
 from stock_ipo_research_agent.tools.statement_locator import (
     PROFIT_AND_LOSS,
     StatementLocation,
+    part_text,
 )
 
 UNIT_INR_CRORE = "INR crore"
@@ -107,6 +109,12 @@ class ExtractedFigure(BaseModel):
     basis: str
     pdf_page: int
     source_line: str
+    page_side: str | None = None  # "left" or "right" when the PDF page is a two-page spread
+
+    @property
+    def page_label(self) -> str:
+        """The page as a reader should look it up, e.g. '332' or '185 (right half)'."""
+        return f"{self.pdf_page} ({self.page_side} half)" if self.page_side else str(self.pdf_page)
 
 
 def parse_number(token: str) -> Decimal | None:
@@ -222,24 +230,26 @@ def extract_pl_headlines(
     if location.statement != PROFIT_AND_LOSS:
         raise ValueError(f"Expected a profit_and_loss location, got {location.statement}.")
 
-    unit, columns = read_header(pages[location.pdf_pages[0] - 1])
+    parts = location.parts or tuple((page, 0) for page in location.pdf_pages)
+    unit, columns = read_header(part_text(pages, *parts[0]))
 
-    hits: dict[str, list[tuple[int, str, ParsedRow]]] = {key: [] for key in HEADLINES}
-    plain_profit: list[tuple[int, str, ParsedRow]] = []
-    strong_profit: list[tuple[int, str, ParsedRow]] = []
-    for page in location.pdf_pages:
-        for line in pages[page - 1].splitlines():
+    Hit = tuple[int, int, str, ParsedRow]  # pdf page, half, source line, parsed row
+    hits: dict[str, list[Hit]] = {key: [] for key in HEADLINES}
+    plain_profit: list[Hit] = []
+    strong_profit: list[Hit] = []
+    for page, half in parts:
+        for line in part_text(pages, page, half).splitlines():
             row = parse_row(line)
             if row is None:
                 continue
             label = normalise_label(row.label)
             for key, pattern in HEADLINES.items():
                 if pattern.match(label):
-                    hits[key].append((page, line.strip(), row))
+                    hits[key].append((page, half, line.strip(), row))
             if PROFIT_FOR_THE_YEAR_STRONG.match(label):
-                strong_profit.append((page, line.strip(), row))
+                strong_profit.append((page, half, line.strip(), row))
             elif PROFIT_FOR_THE_YEAR.match(label):
-                plain_profit.append((page, line.strip(), row))
+                plain_profit.append((page, half, line.strip(), row))
     plain_profit = strong_profit or plain_profit
 
     if not hits["profit_from_continuing_operations"] and plain_profit:
@@ -257,7 +267,9 @@ def extract_pl_headlines(
                 f"Expected exactly one '{key}' row on pages {list(location.pdf_pages)}, "
                 f"found {len(found)}. The row may be missing or wrapped."
             )
-        page, line, row = found[0]
+        page, half, line, row = found[0]
+        is_spread = SPREAD_BREAK in pages[page - 1]
+        side = ("left", "right")[half] if is_spread else None
         for (period, starred), value in zip(columns, (row.current, row.previous)):
             figures.append(
                 ExtractedFigure(
@@ -271,6 +283,7 @@ def extract_pl_headlines(
                     basis=location.basis,
                     pdf_page=page,
                     source_line=line,
+                    page_side=side,
                 )
             )
     _check_income_identity(figures, columns)

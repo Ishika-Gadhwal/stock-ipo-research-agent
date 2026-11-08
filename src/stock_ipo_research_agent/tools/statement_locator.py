@@ -17,14 +17,16 @@ Rules (learned from TMPV, then widened after checking 9 other large companies):
 5. A page right after a statement page that starts with a unit line and has no title
    is a continuation. Capped so a notes page cannot be swallowed.
 
-Known limits: two-page spreads (two printed pages on one wide PDF page) are not
-split yet. Statement of changes in equity pages are deliberately not located.
+Two-page spreads: the reader joins the two halves of a wide page with SPREAD_BREAK, and
+each half is located as its own part. Known limit: statement of changes in equity pages are deliberately not located.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from stock_ipo_research_agent.tools.annual_report_reader import SPREAD_BREAK
 
 BALANCE_SHEET = "balance_sheet"
 PROFIT_AND_LOSS = "profit_and_loss"
@@ -64,6 +66,15 @@ class StatementLocation:
     statement: str
     basis: str
     pdf_pages: tuple[int, ...]
+    # (pdf_page, half) for each piece read. half is 0 for a normal page; 0 (left) or 1
+    # (right) on a two-page spread. Not part of equality, so pdf_pages alone identifies it.
+    parts: tuple[tuple[int, int], ...] = field(default=(), compare=False)
+
+
+def part_text(pages: list[str], pdf_page: int, half: int = 0) -> str:
+    """Text of one part: a whole normal page, or one half of a spread."""
+    pieces = pages[pdf_page - 1].split(SPREAD_BREAK)
+    return pieces[half] if half < len(pieces) else ""
 
 
 def _flatten(text: str) -> str:
@@ -72,9 +83,15 @@ def _flatten(text: str) -> str:
 
 def locate_statements(pages: list[str], max_continuation: int = 2) -> list[StatementLocation]:
     """Find primary statements. Returns them in document order."""
-    found: list[tuple[str, str, list[int]]] = []  # statement, basis, pages
+    # Each half of a spread is its own part. For a normal page, part number = page number.
+    parts = [
+        (page, half, piece)
+        for page, text in enumerate(pages, start=1)
+        for half, piece in enumerate(text.split(SPREAD_BREAK))
+    ]
+    found: list[tuple[str, str, list[int]]] = []  # statement, basis, part numbers
     extra = 0
-    for number, text in enumerate(pages, start=1):
+    for number, (_, _, text) in enumerate(parts, start=1):
         flat = _flatten(text)
         match = _TITLE.search(flat)
         if match and (
@@ -109,7 +126,12 @@ def locate_statements(pages: list[str], max_continuation: int = 2) -> list[State
         elif contiguous and extra < max_continuation and _CONTINUATION.match(flat):
             previous[2].append(number)
             extra += 1
-    return [StatementLocation(s, b, tuple(p)) for s, b, p in found]
+    locations = []
+    for statement, basis, numbers in found:
+        pieces = tuple((parts[n - 1][0], parts[n - 1][1]) for n in numbers)
+        pdf_pages = tuple(dict.fromkeys(page for page, _ in pieces))
+        locations.append(StatementLocation(statement, basis, pdf_pages, pieces))
+    return locations
 
 
 def get_statement(

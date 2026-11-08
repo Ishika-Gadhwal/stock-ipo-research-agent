@@ -33,7 +33,7 @@ def figures_table(facts: FinancialFacts) -> str:
         star = " *" if f.starred else ""
         item = f.key.replace("_", " ").capitalize()
         lines.append(
-            f"| {f.basis.capitalize()} | {item} | {f.period}{star} | {f.value:,} | {f.pdf_page} |"
+            f"| {f.basis.capitalize()} | {item} | {f.period}{star} | {f.value:,} | {f.page_label} |"
         )
     return "\n".join(lines)
 
