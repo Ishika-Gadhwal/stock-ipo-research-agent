@@ -53,6 +53,7 @@ def build_report(
     web_sources: list[str] | None = None,
     web_untraced: list[str] | None = None,
     web_note: str | None = None,
+    web_quarter: list[str] | None = None,
 ) -> str:
     lines = [
         f"# Research notes: {identity.legal_name}",
@@ -136,6 +137,13 @@ def build_report(
                     "Number check: every number in this text appears in a search snippet. "
                     "This does not make it correct."
                 )
+            if web_quarter:
+                lines += [
+                    "",
+                    "**Check the period:** these numbers also appear in a search snippet that "
+                    "mentions a quarter or half-year, so they may not be annual figures: "
+                    + ", ".join(web_quarter),
+                ]
         if web_note:
             lines += ["", web_note]
     return "\n".join(lines) + "\n"

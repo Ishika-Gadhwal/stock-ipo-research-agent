@@ -16,6 +16,7 @@ from stock_ipo_research_agent.tools.financial_facts import (
 )
 from stock_ipo_research_agent.tools.facts_selection import find_facts
 from stock_ipo_research_agent.tools.numbers_check import (
+    find_numbers_near_quarters,
     find_unverified_numbers,
     find_untraced_numbers,
 )
@@ -166,6 +167,7 @@ class ResearchFlow(Flow[ResearchState]):
         web_summary: str | None = None
         web_sources: list[str] = []
         web_untraced: list[str] = []
+        web_quarter: list[str] = []
         web_note: str | None = None
         if facts is None or not facts.figures:
             researched, error = _kickoff(WebFallbackCrew, {"company": company})
@@ -176,8 +178,9 @@ class ResearchFlow(Flow[ResearchState]):
                 if found is not None and found.summary.strip():
                     web_summary = found.summary
                     web_sources = [url for url in found.source_urls if client.was_seen(url)]
-                    corpus = "\n".join(f"{r.title} {r.snippet}" for r in client.all_results())
-                    web_untraced = find_untraced_numbers(web_summary, corpus)
+                    snippets = client.all_snippets()
+                    web_untraced = find_untraced_numbers(web_summary, "\n".join(snippets))
+                    web_quarter = find_numbers_near_quarters(web_summary, snippets)
                 else:
                     web_note = "The web search fallback found nothing usable."
 
@@ -195,6 +198,7 @@ class ResearchFlow(Flow[ResearchState]):
             web_sources=web_sources,
             web_untraced=web_untraced,
             web_note=web_note,
+            web_quarter=web_quarter,
         )
 
 

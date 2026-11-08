@@ -16,6 +16,7 @@ from stock_ipo_research_agent.crews.web_fallback_crew.web_fallback_crew import (
 )
 from stock_ipo_research_agent.models import WebSummary  # noqa: E402
 from stock_ipo_research_agent.tools.numbers_check import (  # noqa: E402
+    find_numbers_near_quarters,
     find_untraced_numbers,
     numbers_in,
 )
@@ -57,7 +58,52 @@ class ClientTests(unittest.TestCase):
         self.assertEqual({r.snippet for r in client.all_results()}, {"one 1", "two 2"})
 
 
+class SnippetMemoryTests(unittest.TestCase):
+    def test_same_url_returned_twice_keeps_both_snippets(self) -> None:
+        from unittest import mock
+
+        def page(snippet):
+            return {"organic": [{"title": "Report", "link": "https://a.example/x", "snippet": snippet}]}
+
+        session = mock.Mock()
+        session.post.return_value.json.side_effect = [page("Revenue 30,680.2 crore"), page("Highlights")]
+        client = SearchClient(api_key="k", session=session)
+        client.search("one")
+        client.search("two")
+        corpus = "\n".join(client.all_snippets())
+        self.assertEqual(find_untraced_numbers("Revenue was 30,680.2 crore.", corpus), [])
+        self.assertEqual(len(client.all_results()), 1)  # the URL registry still keeps one
+
+
+class QuarterFlagTests(unittest.TestCase):
+    SNIPPETS = [
+        "Net Sales (Standalone) 8,423.6 Crores. Annual report 2025-26",
+        "Q2 FY2026-27 Performance at a Glance 8,423.6 Crores 1,095.6 Crores",
+        "Revenue 30,680.2 Crores for the year",
+    ]
+
+    def test_number_in_a_quarter_snippet_is_flagged_for_a_period_check(self) -> None:
+        text = "Sales were 8,423.6 crore and revenue 30,680.2 crore."
+        self.assertEqual(find_numbers_near_quarters(text, self.SNIPPETS), ["8,423.6"])
+
+    def test_no_quarter_words_means_no_flag(self) -> None:
+        self.assertEqual(find_numbers_near_quarters("Revenue 30,680.2.", self.SNIPPETS[2:]), [])
+
+    def test_half_year_and_h1_are_recognised(self) -> None:
+        self.assertEqual(find_numbers_near_quarters("Profit 50.", ["H1 profit 50 crore"]), ["50"])
+
+
 class WebSectionTests(unittest.TestCase):
+    def test_period_warning_appears_in_the_report(self) -> None:
+        text = report(web_summary="Sales 8,423.6.", web_sources=["https://a.example"],
+                      web_untraced=[], web_quarter=["8,423.6"])
+        self.assertIn("**Check the period:**", text)
+        self.assertIn("8,423.6", text.split("**Check the period:**")[1])
+
+    def test_no_period_warning_when_nothing_is_flagged(self) -> None:
+        text = report(web_summary="Sales 1.", web_sources=["https://a.example"], web_untraced=[])
+        self.assertNotIn("Check the period", text)
+
     def test_section_is_absent_when_the_fallback_did_not_run(self) -> None:
         self.assertNotIn("UNVERIFIED", report())
 

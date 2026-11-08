@@ -80,3 +80,23 @@ def find_untraced_numbers(text: str, corpus: str) -> list[str]:
         if abs(value) not in traced and token not in flagged:
             flagged.append(token)
     return flagged
+
+
+_QUARTER_WORDS = re.compile(r"\bQ[1-4]\b|quarter|half[- ]?year|\bH[12]\b|nine months", re.IGNORECASE)
+
+
+def find_numbers_near_quarters(text: str, snippets: list[str]) -> list[str]:
+    """Numbers in text that also appear in a snippet mentioning a quarter or half-year.
+
+    Such a number may be a quarterly figure that the writer labelled as annual. The
+    check only asks the reader to confirm the period. It never says the number is wrong.
+    """
+    quarterly: set[Decimal] = set()
+    for snippet in snippets:
+        if _QUARTER_WORDS.search(snippet):
+            quarterly |= {abs(value) for _, value in numbers_in(snippet)}
+    flagged: list[str] = []
+    for token, value in numbers_in(text):
+        if abs(value) in quarterly and token not in flagged:
+            flagged.append(token)
+    return flagged

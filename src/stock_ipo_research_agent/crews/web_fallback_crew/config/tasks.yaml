@@ -9,6 +9,9 @@ web_research_task:
     - Use ONLY facts that appear in the search results.
     - Copy every figure exactly as written, with its unit and the financial year it
     belongs to. If a result does not give the unit or the year, say so.
+    - Attach a figure to a year ONLY if the same search result names that year next
+    to that figure. Otherwise write "period not stated". Do NOT use a figure from a
+    quarter, half-year or "at a glance" line as an annual figure.
     - Do NOT calculate anything: no percentages, differences, growth or rounding.
     - If the results do not give revenue, profit or another item, write "not found"
     for it.

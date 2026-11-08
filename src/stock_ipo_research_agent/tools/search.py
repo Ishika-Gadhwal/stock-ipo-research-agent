@@ -78,6 +78,7 @@ class SearchClient:
         self.timeout = timeout
         self._session = session or requests.Session()
         self._seen: dict[str, SearchResult] = {}
+        self._snippets: list[str] = []  # every snippet of every search, never overwritten
 
     def search(self, query: str) -> list[SearchResult]:
         query = query.strip()
@@ -113,6 +114,7 @@ class SearchClient:
             )
             results.append(result)
             self._seen[normalise_url(url)] = result
+            self._snippets.append(f"{title} {result.snippet}")
         return results
 
     def was_seen(self, url: str) -> bool:
@@ -122,6 +124,11 @@ class SearchClient:
     def lookup(self, url: str) -> SearchResult | None:
         """The real search result for this URL, or None if no search ever returned it."""
         return self._seen.get(normalise_url(url))
+
+    def all_snippets(self) -> list[str]:
+        """Every title and snippet returned in this run. A URL returned twice with two
+        different snippets keeps both (the registry in _seen keeps only the last)."""
+        return list(self._snippets)
 
     def all_results(self) -> list[SearchResult]:
         """Every result returned in this run (used to trace numbers in unverified text)."""
