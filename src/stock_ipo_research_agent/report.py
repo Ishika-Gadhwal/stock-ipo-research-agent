@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from stock_ipo_research_agent.models import CompanyCandidate
+from stock_ipo_research_agent.models import CompanyCandidate, IpoView
 from stock_ipo_research_agent.tools.financial_facts import FinancialFacts
 
 DISCLAIMER = (
@@ -165,4 +165,103 @@ def build_report(
                 ]
         if web_note:
             lines += ["", web_note]
+    return "\n".join(lines) + "\n"
+
+
+_LEAN_TEXT = {
+    "apply": "Leaning towards applying",
+    "neutral": "Undecided: the news is not clear enough either way",
+    "avoid": "Leaning towards skipping",
+}
+
+
+def effective_lean(view: IpoView, sources: list[tuple[str, str | None, str]]) -> tuple[str, str, str | None]:
+    """The lean to show: (lean, confidence, note).
+
+    Code, not the LLM, has the last word. With no source confirmed against the real
+    search results, a lean would rest on nothing, so it becomes neutral with low confidence.
+    """
+    if not sources:
+        return "neutral", "low", "No source URL could be confirmed, so no lean is given."
+    return view.lean, view.confidence, None
+
+
+def build_ipo_report(
+    company: str,
+    view: IpoView | None,
+    sources: list[tuple[str, str | None, str]],
+    untraced: list[str],
+    note: str | None = None,
+    report_date: str | None = None,
+) -> str:
+    """IPO report. sources are (url, date as shown by search, type) for URLs that were
+    really returned by a search. Everything here is UNVERIFIED."""
+    day = report_date or date.today().isoformat()
+    lines = [
+        f"# IPO research: {company}",
+        "",
+        f"*{DISCLAIMER}*",
+        "",
+        f"Report date: {day} | Data status: "
+        + (
+            "UNVERIFIED, written by an LLM from recent web search snippets. No offer document was read"
+            if view is not None
+            else "no usable news found"
+        ),
+        "",
+        "**UNVERIFIED: this text comes from web search snippets, not from the offer document "
+        "(DRHP or RHP). Check every statement against the sources and the RHP before relying "
+        "on it.**",
+    ]
+    if view is None:
+        lines += ["", note or "No IPO news could be summarised."]
+        return "\n".join(lines) + "\n"
+
+    lean, confidence, lean_note = effective_lean(view, sources)
+    lines += [
+        "",
+        "## Lean from recent news (not advice)",
+        "",
+        f"**{_LEAN_TEXT[lean]}** (confidence: {confidence})",
+    ]
+    if lean_note:
+        lines += ["", lean_note]
+    elif view.lean_reason.strip():
+        lines += ["", view.lean_reason.strip()]
+    lines += [
+        "",
+        "*This is a reading of news snippets. It cannot know your goals, finances or risk "
+        "tolerance, and the final price band can differ from older articles. Read the RHP "
+        "and decide for yourself.*",
+        "",
+        "## Summary",
+        "",
+        view.summary.strip(),
+        "",
+        "## Pros (from the news)",
+        "",
+    ]
+    lines += [f"- {point}" for point in view.pros] or ["- none found"]
+    lines += ["", "## Cons and risks (from the news)", ""]
+    lines += [f"- {point}" for point in view.cons] or ["- none found"]
+    lines += ["", "## Sources (each was returned by a search)", ""]
+    if sources:
+        lines += ["| URL | Date shown by search | Type |", "|---|---|---|"]
+        lines += [f"| {url} | {when or 'Not stated'} | {kind} |" for url, when, kind in sources]
+    else:
+        lines.append("No source URL could be confirmed against the search results.")
+    if untraced:
+        lines += [
+            "",
+            "**Warning:** these numbers do not appear in any search snippet from this run: "
+            + ", ".join(untraced),
+        ]
+    else:
+        lines += [
+            "",
+            "Number check: every number in this text appears in a search snippet. "
+            "This does not make it correct.",
+        ]
+    if note:
+        lines += ["", note]
     return "\n".join(lines) + "\n"

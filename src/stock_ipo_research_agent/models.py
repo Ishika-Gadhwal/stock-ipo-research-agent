@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -60,4 +62,16 @@ class WebSummary(BaseModel):
     """The web researcher's output. UNVERIFIED: written from search snippets, not the PDF."""
 
     summary: str
+    source_urls: list[str] = []
+
+
+class IpoView(BaseModel):
+    """IPO news output. UNVERIFIED: written from search snippets, not from the offer document."""
+
+    summary: str
+    pros: list[str] = []
+    cons: list[str] = []
+    lean: Literal["apply", "neutral", "avoid"] = "neutral"
+    lean_reason: str = ""
+    confidence: Literal["low", "medium", "high"] = "low"
     source_urls: list[str] = []

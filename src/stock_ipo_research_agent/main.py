@@ -9,7 +9,7 @@ from crewai.flow import Flow, listen, start ,or_, router
 from stock_ipo_research_agent.crews.content_crew.content_crew import ContentCrew
 from stock_ipo_research_agent.crews.identity_crew.identity_crew import IdentityCrew
 from stock_ipo_research_agent.models import CompanyCandidate
-from stock_ipo_research_agent.report import DISCLAIMER, build_report
+from stock_ipo_research_agent.report import build_ipo_report, build_report
 from stock_ipo_research_agent.tools.financial_facts import (
     extract_pl_facts,
     reset_company,
@@ -24,6 +24,7 @@ from stock_ipo_research_agent.tools.numbers_check import (
 from stock_ipo_research_agent.tools.search import get_search_client, reset_search_client
 from stock_ipo_research_agent.tools.source_checks import build_source_table
 
+from stock_ipo_research_agent.crews.ipo_news_crew.ipo_news_crew import IpoNewsCrew
 from stock_ipo_research_agent.crews.narrative_crew.narrative_crew import NarrativeCrew
 from stock_ipo_research_agent.crews.web_fallback_crew.web_fallback_crew import WebFallbackCrew
 from stock_ipo_research_agent.tools.narrative_input import build_writer_input
@@ -112,12 +113,28 @@ class ResearchFlow(Flow[ResearchState]):
         return self.state.mode
 
     @listen("ipo")
-    def ipo_stub(self):
-        # WHY: the IPO path is built in a later step. Say so plainly instead of guessing.
-        self.state.report = (
-            f"# IPO research: {self.state.company}\n\n*{DISCLAIMER}*\n\n"
-            "The IPO path is not built yet. No research was done.\n"
-        )
+    def run_ipo_research(self):
+        # Simple by design: the LLM reads recent news snippets and gives pros, cons and a
+        # cautious lean. Code checks the sources and numbers, and has the last word on the lean.
+        company = self.state.company
+        client = get_search_client()
+        result, error = _kickoff(IpoNewsCrew, {"company": company})
+        view = None
+        note = f"The IPO news research could not run. {error}" if error else None
+        if result is not None:
+            view = result.tasks_output[0].pydantic
+            if view is None or not view.summary.strip():
+                view, note = None, "The IPO news search found nothing usable."
+        sources: list[tuple[str, str | None, str]] = []
+        untraced: list[str] = []
+        if view is not None:
+            for url in dict.fromkeys(view.source_urls):
+                found = client.lookup(url)  # only URLs a search really returned
+                if found is not None:
+                    sources.append((found.url, found.date, found.source_type))
+            written = " ".join([view.summary, view.lean_reason, *view.pros, *view.cons])
+            untraced = find_untraced_numbers(written, "\n".join(client.all_snippets()))
+        self.state.report = build_ipo_report(company, view, sources, untraced, note)
 
     @listen("stock")
     def resolve_identity(self):        
@@ -234,7 +251,7 @@ class ResearchFlow(Flow[ResearchState]):
         )
 
 
-    @listen(or_(run_research, ipo_stub))
+    @listen(or_(run_research, run_ipo_research))
     def save_report(self):
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)

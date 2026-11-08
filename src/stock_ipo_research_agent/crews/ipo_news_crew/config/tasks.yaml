@@ -1,0 +1,28 @@
+ipo_news_task:
+  description: >
+    Research the IPO of {company} from recent news. Use the search tool for at most 3
+    searches: 1. the company name with "IPO news" 2. the company name with "IPO price
+    band subscription review" 3. the company name with "IPO risks concerns".
+    Then fill the fields below.
+    Rules:
+    - Use ONLY facts that appear in the search results. Prefer the most recent results
+    and mention a result's date when it is given.
+    - summary: at most 5 sentences. What the company does, the issue size, price band,
+    dates and listing, but only if a result says so. Write "not found" for anything the
+    results do not give.
+    - Copy every figure exactly as written, with its unit. Do NOT calculate anything.
+    - Report the grey market premium only if a result states it, and call it unofficial.
+    - pros: up to 4 short points in favour, each taken from the results.
+    - cons: up to 4 short points of concern or risk, each taken from the results. If
+    the results give no risks, write "no risks found in the results" as the only item.
+    - lean: apply, neutral or avoid. It is a reading of the news only, not advice. Use
+    neutral when the results are few, old, promotional or mixed.
+    - confidence: low, medium or high. Use low when the results are few, old or only
+    promotional.
+    - lean_reason: one or two sentences on what in the news drives the lean and what
+    would change it.
+    - source_urls: only URLs that appear in the search results, copied exactly.
+    Do NOT invent or change a URL. Do NOT use knowledge that is not in the results.
+  expected_output: >
+    summary, pros, cons, lean, lean_reason, confidence and source_urls.
+  agent: ipo_analyst

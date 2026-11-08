@@ -21,7 +21,7 @@ from test_flow import (  # noqa: E402
 )
 
 from stock_ipo_research_agent import main  # noqa: E402
-from stock_ipo_research_agent.models import IdentityResult  # noqa: E402
+from stock_ipo_research_agent.models import IdentityResult, IpoView  # noqa: E402
 
 
 class NormaliseModeTests(unittest.TestCase):
@@ -40,6 +40,9 @@ class NormaliseModeTests(unittest.TestCase):
 
 class RouterFlowTests(unittest.TestCase):
     def run_flow(self, payload):
+        ipo_output = SimpleNamespace(
+            tasks_output=[SimpleNamespace(pydantic=IpoView(summary="Issue news not found."))]
+        )
         identity_crew = fake_crew(SimpleNamespace(pydantic=IdentityResult(candidates=[COMPANY])))
         content_crew = fake_crew(content_output([URL], URL))
         with tempfile.TemporaryDirectory() as tmp:
@@ -50,6 +53,7 @@ class RouterFlowTests(unittest.TestCase):
                      mock.patch.object(main, "ContentCrew", content_crew), \
                      mock.patch.object(main, "NarrativeCrew", fake_crew(writer_output("Ok."))), \
                      mock.patch.object(main, "WebFallbackCrew", fake_crew(web_output("n", []))), \
+                     mock.patch.object(main, "IpoNewsCrew", fake_crew(ipo_output)), \
                      mock.patch.object(main, "get_search_client", return_value=client_that_saw()), \
                      mock.patch.object(main, "reset_search_client"), \
                      mock.patch.object(main, "extract_pl_facts", side_effect=fake_extract), \
@@ -60,10 +64,10 @@ class RouterFlowTests(unittest.TestCase):
                 os.chdir(previous)
         return text, identity_crew
 
-    def test_ipo_mode_saves_a_stub_and_never_starts_the_stock_path(self) -> None:
+    def test_ipo_mode_runs_the_ipo_path_and_never_starts_the_stock_path(self) -> None:
         text, identity_crew = self.run_flow({"company": "Some IPO Ltd", "mode": "ipo"})
         self.assertIn("# IPO research: Some IPO Ltd", text)
-        self.assertIn("The IPO path is not built yet", text)
+        self.assertIn("UNVERIFIED", text)
         self.assertIn("Not investment advice", text)
         identity_crew.assert_not_called()
 
