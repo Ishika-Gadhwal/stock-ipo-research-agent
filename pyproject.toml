@@ -1,8 +1,8 @@
 [project]
 name = "stock_ipo_research_agent"
 version = "0.1.0"
-description = "stock-ipo-research-agent using crewAI"
-authors = [{ name = "Your Name", email = "you@example.com" }]
+description = "Educational CrewAI Flow that researches Indian listed companies and IPOs."
+authors = [{ name = "Ishika Gadhwal", email = "ishikagadhwal55@gmail.com" }]
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "crewai[google-genai,tools]>=1.15.34,<2.0.0",

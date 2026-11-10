@@ -13,7 +13,7 @@ Layout facts learned from the TMPV FY26 report (page 332 and 456 probes):
   Wrapped rows are not supported: a needed row that wraps raises ExtractionError.
 - Wording differs by basis, so rows are matched by label wording, not by numeral.
 
-Widened after checking 9 other large companies (see scripts and tests):
+Widened after checking 9 other large companies (see tests):
 - The rupee sign extracts as a stray letter ("v crore", "I crore"), so the unit is
   read from the WORD crore, million or lakh, never from the symbol.
 - Column headers may read "March 31, 2026", "31st March, 2026", "March 31," over
