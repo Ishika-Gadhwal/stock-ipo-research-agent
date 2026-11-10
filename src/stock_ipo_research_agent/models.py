@@ -69,6 +69,7 @@ class IpoView(BaseModel):
     """IPO news output. UNVERIFIED: written from search snippets, not from the offer document."""
 
     summary: str
+    stage: Literal["upcoming", "open", "closed", "listed", "unknown"] = "unknown"
     pros: list[str] = []
     cons: list[str] = []
     lean: Literal["apply", "neutral", "avoid"] = "neutral"

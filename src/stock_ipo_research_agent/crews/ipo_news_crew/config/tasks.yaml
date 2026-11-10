@@ -1,6 +1,7 @@
 ipo_news_task:
   description: >
-    Research the IPO of {company} from recent news. Use the search tool for at most 3
+    Research the IPO of {company} from recent news. Today's date is {today}; use it to
+    judge how old a result is. Use the search tool for at most 3
     searches: 1. the company name with "IPO news" 2. the company name with "IPO price
     band subscription review" 3. the company name with "IPO risks concerns".
     Then fill the fields below.
@@ -12,6 +13,9 @@ ipo_news_task:
     results do not give.
     - Copy every figure exactly as written, with its unit. Do NOT calculate anything.
     - Report the grey market premium only if a result states it, and call it unofficial.
+    - stage: upcoming (bidding not started), open (bidding now), closed (bidding ended,
+    shares not yet listed), listed (shares trading on the exchanges) or unknown. Decide
+    from the results and their dates only.
     - pros: up to 4 short points in favour, each taken from the results.
     - cons: up to 4 short points of concern or risk, each taken from the results. If
     the results give no risks, write "no risks found in the results" as the only item.
@@ -24,5 +28,5 @@ ipo_news_task:
     - source_urls: only URLs that appear in the search results, copied exactly.
     Do NOT invent or change a URL. Do NOT use knowledge that is not in the results.
   expected_output: >
-    summary, pros, cons, lean, lean_reason, confidence and source_urls.
+    summary, stage, pros, cons, lean, lean_reason, confidence and source_urls.
   agent: ipo_analyst

@@ -6,7 +6,8 @@ by an LLM, so they are labelled as such and checked against the extracted figure
 
 from __future__ import annotations
 
-from datetime import date
+import re
+from datetime import date, timedelta
 
 from stock_ipo_research_agent.models import CompanyCandidate, IpoView
 from stock_ipo_research_agent.tools.financial_facts import FinancialFacts
@@ -175,6 +176,27 @@ _LEAN_TEXT = {
 }
 
 
+_STAGE_NOTE = {
+    "listed": "The issue has closed and the shares are already listed, so applying is no longer "
+    "possible. The news below is a post-listing review, not an apply-or-skip view.",
+    "closed": "The bidding has closed, so applying is no longer possible. The open question now "
+    "is whether to buy after listing, which is a normal stock decision.",
+}
+_RELATIVE_DATE = re.compile(r"(\d+)\s+(day|week|month|year)s?\s+ago", re.IGNORECASE)
+_DAYS = {"day": 1, "week": 7, "month": 30, "year": 365}
+
+
+def absolute_date(shown: str | None, today: date) -> str:
+    """'2 days ago' becomes '2 days ago (about 2026-11-07)', so the date does not go stale."""
+    if not shown:
+        return "Not stated"
+    match = _RELATIVE_DATE.search(shown)
+    if not match:
+        return shown
+    days = int(match.group(1)) * _DAYS[match.group(2).lower()]
+    return f"{shown} (about {(today - timedelta(days=days)).isoformat()})"
+
+
 def effective_lean(view: IpoView, sources: list[tuple[str, str | None, str]]) -> tuple[str, str, str | None]:
     """The lean to show: (lean, confidence, note).
 
@@ -183,6 +205,8 @@ def effective_lean(view: IpoView, sources: list[tuple[str, str | None, str]]) ->
     """
     if not sources:
         return "neutral", "low", "No source URL could be confirmed, so no lean is given."
+    if view.stage in _STAGE_NOTE:
+        return "over", "", _STAGE_NOTE[view.stage]
     return view.lean, view.confidence, None
 
 
@@ -218,16 +242,19 @@ def build_ipo_report(
         return "\n".join(lines) + "\n"
 
     lean, confidence, lean_note = effective_lean(view, sources)
-    lines += [
-        "",
-        "## Lean from recent news (not advice)",
-        "",
-        f"**{_LEAN_TEXT[lean]}** (confidence: {confidence})",
-    ]
-    if lean_note:
-        lines += ["", lean_note]
-    elif view.lean_reason.strip():
-        lines += ["", view.lean_reason.strip()]
+    if lean == "over":
+        lines += ["", "## Where this IPO stands", "", f"**Stage: {view.stage}.** {lean_note}"]
+    else:
+        lines += [
+            "",
+            "## Lean from recent news (not advice)",
+            "",
+            f"**{_LEAN_TEXT[lean]}** (confidence: {confidence})",
+        ]
+        if lean_note:
+            lines += ["", lean_note]
+        elif view.lean_reason.strip():
+            lines += ["", view.lean_reason.strip()]
     lines += [
         "",
         "*This is a reading of news snippets. It cannot know your goals, finances or risk "
@@ -247,7 +274,8 @@ def build_ipo_report(
     lines += ["", "## Sources (each was returned by a search)", ""]
     if sources:
         lines += ["| URL | Date shown by search | Type |", "|---|---|---|"]
-        lines += [f"| {url} | {when or 'Not stated'} | {kind} |" for url, when, kind in sources]
+        today = date.fromisoformat(day)
+        lines += [f"| {url} | {absolute_date(when, today)} | {kind} |" for url, when, kind in sources]
     else:
         lines.append("No source URL could be confirmed against the search results.")
     if untraced:

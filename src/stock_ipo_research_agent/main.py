@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import time
+from datetime import date
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -118,7 +119,9 @@ class ResearchFlow(Flow[ResearchState]):
         # cautious lean. Code checks the sources and numbers, and has the last word on the lean.
         company = self.state.company
         client = get_search_client()
-        result, error = _kickoff(IpoNewsCrew, {"company": company})
+        result, error = _kickoff(
+            IpoNewsCrew, {"company": company, "today": date.today().isoformat()}
+        )
         view = None
         note = f"The IPO news research could not run. {error}" if error else None
         if result is not None:

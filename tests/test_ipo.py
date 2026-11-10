@@ -18,7 +18,13 @@ from test_flow import crashing_crew, fake_crew  # noqa: E402
 from stock_ipo_research_agent import main  # noqa: E402
 from stock_ipo_research_agent.crews.ipo_news_crew.ipo_news_crew import IpoNewsCrew  # noqa: E402
 from stock_ipo_research_agent.models import IpoView  # noqa: E402
-from stock_ipo_research_agent.report import build_ipo_report, effective_lean  # noqa: E402
+from datetime import date  # noqa: E402
+
+from stock_ipo_research_agent.report import (  # noqa: E402
+    absolute_date,
+    build_ipo_report,
+    effective_lean,
+)
 from stock_ipo_research_agent.tools.search import SearchClient  # noqa: E402
 
 NEWS = "https://news.example/acme-ipo"
@@ -73,7 +79,7 @@ class ReportTests(unittest.TestCase):
         self.assertIn("It cannot know your goals, finances or risk tolerance", text)
         self.assertIn("- Strong order book", text)
         self.assertIn("- Rich valuation", text)
-        self.assertIn(f"| {NEWS} | 2 days ago | unverified |", text)
+        self.assertIn(f"| {NEWS} | 2 days ago (about 2026-11-06) | unverified |", text)
         self.assertIn("This does not make it correct.", text)
 
     def test_avoid_and_neutral_wording(self) -> None:
@@ -103,12 +109,56 @@ class ReportTests(unittest.TestCase):
         self.assertIn("UNVERIFIED", text)
 
 
+class StageTests(unittest.TestCase):
+    def build(self, **changes):
+        return build_ipo_report(
+            "Acme", view(**changes), SOURCES, [], report_date="2026-11-08"
+        )
+
+    def test_listed_issue_says_applying_is_no_longer_possible_and_hides_the_lean(self) -> None:
+        text = self.build(stage="listed", lean="apply", confidence="high")
+        self.assertIn("## Where this IPO stands", text)
+        self.assertIn("**Stage: listed.**", text)
+        self.assertIn("applying is no longer possible", text)
+        self.assertNotIn("Leaning towards", text)
+        self.assertNotIn("confidence:", text)
+        self.assertIn("- Strong order book", text)  # the news is still shown
+
+    def test_closed_issue_points_to_the_buy_after_listing_question(self) -> None:
+        text = self.build(stage="closed")
+        self.assertIn("The bidding has closed", text)
+        self.assertIn("buy after listing", text)
+
+    def test_open_and_upcoming_and_unknown_keep_the_normal_lean(self) -> None:
+        for stage in ("open", "upcoming", "unknown"):
+            self.assertIn("Leaning towards applying", self.build(stage=stage), stage)
+
+    def test_no_confirmed_source_still_wins_over_the_stage(self) -> None:
+        lean, confidence, note = effective_lean(view(stage="listed"), [])
+        self.assertEqual((lean, confidence), ("neutral", "low"))
+        self.assertIn("No source URL could be confirmed", note)
+
+
+class DateTests(unittest.TestCase):
+    TODAY = date(2026, 11, 8)
+
+    def test_relative_dates_get_an_absolute_date(self) -> None:
+        self.assertEqual(absolute_date("2 days ago", self.TODAY), "2 days ago (about 2026-11-06)")
+        self.assertEqual(absolute_date("1 week ago", self.TODAY), "1 week ago (about 2026-11-01)")
+        self.assertEqual(absolute_date("2 weeks ago", self.TODAY), "2 weeks ago (about 2026-10-25)")
+
+    def test_absolute_and_missing_dates_are_left_alone(self) -> None:
+        self.assertEqual(absolute_date("19 Oct 2026", self.TODAY), "19 Oct 2026")
+        self.assertEqual(absolute_date(None, self.TODAY), "Not stated")
+
+
 class CrewTests(unittest.TestCase):
     def test_analyst_has_the_search_tool_and_checked_output(self) -> None:
         crew = IpoNewsCrew().crew()
         self.assertIs(crew.tasks[0].output_pydantic, IpoView)
         self.assertEqual([t.name for t in crew.agents[0].tools], ["Source search"])
         self.assertIn("{company}", crew.tasks[0].description)
+        self.assertIn("{today}", crew.tasks[0].description)
 
 
 class IpoFlowTests(unittest.TestCase):
@@ -139,7 +189,7 @@ class IpoFlowTests(unittest.TestCase):
     def test_good_run_gives_lean_sources_with_dates_and_a_clean_number_check(self) -> None:
         text = self.run_flow(fake_crew(self.output(view())))
         self.assertIn("**Leaning towards applying** (confidence: medium)", text)
-        self.assertIn(f"| {NEWS} | 2 days ago | unverified |", text)
+        self.assertIn(f"| {NEWS} | 2 days ago (about ", text)
         self.assertIn("every number in this text appears in a search snippet", text)
 
     def test_invented_number_and_invented_url_are_caught(self) -> None:
@@ -155,6 +205,13 @@ class IpoFlowTests(unittest.TestCase):
         text = self.run_flow(fake_crew(self.output(view(source_urls=["https://made.up/x"]))))
         self.assertIn("Undecided", text)
         self.assertIn("No source URL could be confirmed", text)
+
+    def test_the_crew_is_given_todays_date(self) -> None:
+        crew = fake_crew(self.output(view()))
+        self.run_flow(crew)
+        inputs = crew.return_value.crew.return_value.kickoff.call_args.kwargs["inputs"]
+        self.assertEqual(inputs["today"], date.today().isoformat())
+        self.assertEqual(inputs["company"], "Acme IPO")
 
     def test_empty_summary_gives_the_nothing_usable_note(self) -> None:
         text = self.run_flow(fake_crew(self.output(view(summary="  "))))
